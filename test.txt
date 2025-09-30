@@ -1,3 +1,122 @@
+package com.example.oauth;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.Map;
+
+@Service
+public class OAuthService {
+
+    private final WebClient webClient;
+
+    @Value("${oauth.client-id}")
+    private String clientId;
+
+    @Value("${oauth.client-secret}")
+    private String clientSecret;
+
+    @Value("${oauth.token-url}")
+    private String tokenUrl;
+
+    @Value("${oauth.revoke-url}")
+    private String revokeUrl;
+
+    public OAuthService(WebClient.Builder webClientBuilder) {
+        this.webClient = webClientBuilder.build();
+    }
+
+    /**
+     * Refresh access token using backend refresh token API (Basic Auth)
+     */
+    public Mono<Map> refreshToken(String refreshToken) {
+        String authHeader = basicAuthHeader(clientId, clientSecret);
+
+        return webClient.post()
+                .uri(tokenUrl)
+                .header(HttpHeaders.AUTHORIZATION, authHeader)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .bodyValue("grant_type=refresh_token&refresh_token=" + refreshToken)
+                .retrieve()
+                .bodyToMono(Map.class);
+    }
+
+    /**
+     * Revoke access/refresh token
+     */
+    public Mono<Void> revokeToken(String token) {
+        String authHeader = basicAuthHeader(clientId, clientSecret);
+
+        return webClient.post()
+                .uri(revokeUrl)
+                .header(HttpHeaders.AUTHORIZATION, authHeader)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .bodyValue("token=" + token)
+                .retrieve()
+                .bodyToMono(Void.class);
+    }
+
+    /**
+     * Helper: generate Basic Auth header
+     */
+    private String basicAuthHeader(String clientId, String clientSecret) {
+        String auth = clientId + ":" + clientSecret;
+        return "Basic " + Base64.getEncoder().encodeToString(auth.getBytes(StandardCharsets.UTF_8));
+    }
+}
+
+
+package com.example.oauth;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
+
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/oauth")
+public class OAuthController {
+
+    private final OAuthService oAuthService;
+
+    @Autowired
+    public OAuthController(OAuthService oAuthService) {
+        this.oAuthService = oAuthService;
+    }
+
+    /**
+     * Refresh access token using refresh token
+     * POST /api/oauth/refresh
+     */
+    @PostMapping("/refresh")
+    public Mono<ResponseEntity<Map>> refreshToken(@RequestParam("refreshToken") String refreshToken) {
+        return oAuthService.refreshToken(refreshToken)
+                .map(tokenResponse -> ResponseEntity.ok(tokenResponse))
+                .onErrorResume(e -> Mono.just(ResponseEntity.status(500).build()));
+    }
+
+    /**
+     * Revoke token (access or refresh)
+     * POST /api/oauth/revoke
+     */
+    @PostMapping("/revoke")
+    public Mono<ResponseEntity<Void>> revokeToken(@RequestParam("token") String token) {
+        return oAuthService.revokeToken(token)
+                .then(Mono.just(ResponseEntity.ok().build()))
+                .onErrorResume(e -> Mono.just(ResponseEntity.status(500).build()));
+    }
+}
+
+
+
+
 // src/app/encrypted-oauth-storage.ts
 import { OAuthStorage } from 'angular-oauth2-oidc';
 
