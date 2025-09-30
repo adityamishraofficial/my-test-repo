@@ -30,6 +30,42 @@ export class EncryptedOAuthStorage implements OAuthStorage {
 
 
 
+// src/app/auth.interceptor.ts
+import { inject } from '@angular/core';
+import { HttpInterceptorFn, HttpRequest } from '@angular/common/http';
+import { AuthService } from './auth.service';
+
+export const authInterceptor: HttpInterceptorFn = (req, next) => {
+  const authService = inject(AuthService);
+
+  // Skip adding token for OAuth server calls
+  // (adjust these URLs to match your IdP’s endpoints)
+  const excludedUrls = [
+    '/.well-known/openid-configuration',
+    '/protocol/openid-connect/token',
+    '/protocol/openid-connect/revoke',
+    '/protocol/openid-connect/userinfo'
+  ];
+
+  if (excludedUrls.some(url => req.url.includes(url))) {
+    return next(req);
+  }
+
+  // Get the access token from AuthService
+  const token = authService.accessToken;
+
+  if (token) {
+    const headers = req.headers.set('Authorization', `Bearer ${token}`);
+    const authReq = req.clone({ headers });
+    return next(authReq);
+  }
+
+  return next(req);
+};
+
+
+
+
 
 
 // src/app/auth.service.ts
