@@ -1,4 +1,104 @@
-   public Mono<Map> refreshToken(String refreshToken) {
+  // Endpoint for Angular app to call refresh token
+    @PostMapping("/refresh")
+    public Mono<ResponseEntity<Map>> refreshToken(@RequestParam("refreshToken") String refreshToken) {
+        return oAuthService.refreshToken(refreshToken)
+                .map(tokens -> ResponseEntity.ok(tokens))
+                .onErrorResume(e -> Mono.just(ResponseEntity.status(500).build()));
+    }
+
+    // Endpoint for Angular app to revoke a token
+    @PostMapping("/revoke")
+    public Mono<ResponseEntity<Void>> revokeToken(@RequestParam("token") String token) {
+        return oAuthService.revokeToken(token)
+                .then(Mono.just(ResponseEntity.ok().build()))
+                .onErrorResume(e -> Mono.just(ResponseEntity.status(500).build()));
+    }
+
+
+
+package com.example.oauth;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.Map;
+
+@Service
+public class OAuthService {
+
+    private final WebClient webClient;
+
+    @Value("${oauth.client-id}")
+    private String clientId;
+
+    @Value("${oauth.client-secret}")
+    private String clientSecret;
+
+    @Value("${oauth.refresh-url}")
+    private String refreshUrl;
+
+    @Value("${oauth.revoke-url}")
+    private String revokeUrl;
+
+    public OAuthService(WebClient.Builder builder) {
+        this.webClient = builder.build();
+    }
+
+    /**
+     * Call IdP refresh token API with Basic Auth through backend
+     */
+    public Mono<Map> refreshToken(String refreshToken) {
+        String authHeader = basicAuthHeader(clientId, clientSecret);
+
+        return webClient.post()
+                .uri(refreshUrl)
+                .header(HttpHeaders.AUTHORIZATION, authHeader)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(BodyInserters.fromFormData("grant_type", "refresh_token")
+                        .with("scope", "openid profile email entitlements groups")
+                        .with("refresh_token", refreshToken)
+                        .with("client_id", clientId))
+                .retrieve()
+                .bodyToMono(Map.class);
+    }
+
+    /**
+     * Revoke a token (access or refresh)
+     */
+    public Mono<Void> revokeToken(String token) {
+        String authHeader = basicAuthHeader(clientId, clientSecret);
+
+        return webClient.post()
+                .uri(revokeUrl)
+                .header(HttpHeaders.AUTHORIZATION, authHeader)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(BodyInserters.fromFormData("token", token))
+                .retrieve()
+                .bodyToMono(Void.class);
+    }
+
+    /**
+     * Build Basic Auth header
+     */
+    private String basicAuthHeader(String clientId, String clientSecret) {
+        String auth = clientId + ":" + clientSecret;
+        return "Basic " + Base64.getEncoder().encodeToString(auth.getBytes(StandardCharsets.UTF_8));
+    }
+}
+
+
+
+
+
+
+public Mono<Map> refreshToken(String refreshToken) {
         String authHeader = basicAuthHeader(clientId, clientSecret);
 
         String body = "grant_type=refresh_token&refresh_token=" + refreshToken;
