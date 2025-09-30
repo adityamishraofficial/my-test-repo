@@ -376,3 +376,24 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     })
   );
 };
+
+
+   // Optional: force token expiry every 30 seconds for testing
+    setInterval(() => {
+      console.log('⏰ Forcing token expiry for testing...');
+      (this.oauthService as any).getAccessTokenExpiration = () =>
+        Date.now() - 1000;
+    }, 30_000);
+
+    // Listen to OAuth events
+    this.oauthService.events.subscribe(e => {
+      if (e.type === 'token_received') {
+        console.log('✅ Token refreshed at', new Date());
+      }
+      if (e.type === 'silent_refresh_error') {
+        console.error('❌ Silent refresh failed', e);
+      }
+      if (e.type === 'session_terminated') {
+        console.warn('⚠️ Session ended');
+      }
+    });
