@@ -1,4 +1,92 @@
-  // Endpoint for Angular app to call refresh token
+ /**
+     * Refresh access token via backend
+     */
+    public Mono<Map> refreshToken(String refreshToken) {
+        String authHeader = basicAuthHeader(clientId, clientSecret);
+
+        return webClient.post()
+                .uri(refreshUrl)
+                .header(HttpHeaders.AUTHORIZATION, authHeader)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(BodyInserters
+                        .fromFormData("grant_type", "refresh_token")
+                        .with("scope", "openid profile email entitlements groups")
+                        .with("refresh_token", refreshToken)
+                        .with("client_id", clientId)
+                )
+                .retrieve()
+                .onStatus(
+                    status -> status.isError(),
+                    response -> response.bodyToMono(String.class)
+                            .flatMap(errorBody -> {
+                                System.err.println("❌ OAuth server error: " + errorBody);
+                                return Mono.error(new RuntimeException("OAuth error: " + errorBody));
+                            })
+                )
+                .bodyToMono(Map.class);
+    }
+
+    /**
+     * Revoke a token (access or refresh)
+     */
+    public Mono<Void> revokeToken(String token) {
+        String authHeader = basicAuthHeader(clientId, clientSecret);
+
+        return webClient.post()
+                .uri(revokeUrl)
+                .header(HttpHeaders.AUTHORIZATION, authHeader)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(BodyInserters
+                        .fromFormData("token", token)
+                )
+                .retrieve()
+                .onStatus(
+                    status -> status.isError(),
+                    response -> response.bodyToMono(String.class)
+                            .flatMap(errorBody -> {
+                                System.err.println("❌ OAuth revoke error: " + errorBody);
+                                return Mono.error(new RuntimeException("Revoke error: " + errorBody));
+                            })
+                )
+                .bodyToMono(Void.class);
+    }
+
+    /**
+     * Build Basic Auth header
+     */
+    private String basicAuthHeader(String clientId, String clientSecret) {
+        String auth = clientId + ":" + clientSecret;
+        return "Basic " + Base64.getEncoder().encodeToString(auth.getBytes(StandardCharsets.UTF_8));
+    }
+}
+
+
+
+   @PostMapping("/refresh")
+    public Mono<ResponseEntity<Map>> refreshToken(@RequestParam("refresh_token") String refreshToken) {
+        return oAuthService.refreshToken(refreshToken)
+                .map(tokens -> ResponseEntity.ok(tokens))
+                .onErrorResume(e -> {
+                    System.err.println("❌ RefreshToken Controller Error: " + e.getMessage());
+                    return Mono.just(ResponseEntity.status(500).build());
+                });
+    }
+
+    /**
+     * Endpoint for Angular to revoke token
+     */
+    @PostMapping("/revoke")
+    public Mono<ResponseEntity<Void>> revokeToken(@RequestParam("token") String token) {
+        return oAuthService.revokeToken(token)
+                .then(Mono.just(ResponseEntity.ok().build()))
+                .onErrorResume(e -> {
+                    System.err.println("❌ RevokeToken Controller Error: " + e.getMessage());
+                    return Mono.just(ResponseEntity.status(500).build());
+                });
+    }
+
+
+// Endpoint for Angular app to call refresh token
     @PostMapping("/refresh")
     public Mono<ResponseEntity<Map>> refreshToken(@RequestParam("refreshToken") String refreshToken) {
         return oAuthService.refreshToken(refreshToken)
