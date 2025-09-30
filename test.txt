@@ -1,3 +1,64 @@
+   public Mono<Map> refreshToken(String refreshToken) {
+        String authHeader = basicAuthHeader(clientId, clientSecret);
+
+        String body = "grant_type=refresh_token&refresh_token=" + refreshToken;
+
+        return webClient.post()
+                .uri(refreshUrl)
+                .header(HttpHeaders.AUTHORIZATION, authHeader)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .bodyValue(body)
+                .retrieve()
+                .bodyToMono(Map.class);
+    }
+
+
+  /**
+     * Revoke a token (access or refresh)
+     */
+    public Mono<Void> revokeToken(String token) {
+        String authHeader = basicAuthHeader(clientId, clientSecret);
+
+        String body = "token=" + token;
+
+        return webClient.post()
+                .uri(revokeUrl)
+                .header(HttpHeaders.AUTHORIZATION, authHeader)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .bodyValue(body)
+                .retrieve()
+                .bodyToMono(Void.class);
+    }
+
+    /**
+     * Build Basic Auth header
+     */
+    private String basicAuthHeader(String clientId, String clientSecret) {
+        String auth = clientId + ":" + clientSecret;
+        return "Basic " + Base64.getEncoder().encodeToString(auth.getBytes(StandardCharsets.UTF_8));
+    }
+
+
+
+  // Endpoint for Angular app to call refresh token
+    @PostMapping("/refresh")
+    public Mono<ResponseEntity<Map>> refreshToken(@RequestParam("refreshToken") String refreshToken) {
+        return oAuthService.refreshToken(refreshToken)
+                .map(tokens -> ResponseEntity.ok(tokens))
+                .onErrorResume(e -> Mono.just(ResponseEntity.status(500).build()));
+    }
+
+    // Endpoint for Angular app to revoke a token
+    @PostMapping("/revoke")
+    public Mono<ResponseEntity<Void>> revokeToken(@RequestParam("token") String token) {
+        return oAuthService.revokeToken(token)
+                .then(Mono.just(ResponseEntity.ok().build()))
+                .onErrorResume(e -> Mono.just(ResponseEntity.status(500).build()));
+    }
+
+
+
+
 package com.example.oauth;
 
 import org.springframework.beans.factory.annotation.Value;
