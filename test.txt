@@ -339,17 +339,16 @@ bootstrapApplication(AppComponent, {
 
 
 
-
 // src/app/auth.interceptor.ts
 import { inject } from '@angular/core';
-import { HttpInterceptorFn, HttpRequest } from '@angular/common/http';
-import { AuthService } from './auth.service';
+import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
+import { catchError, throwError } from 'rxjs';
+import { OAuthService } from 'angular-oauth2-oidc';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  const authService = inject(AuthService);
+  const oauthService = inject(OAuthService);
 
-  // Skip adding token for OAuth server calls
-  // (adjust these URLs to match your IdP’s endpoints)
+  // URLs to exclude (OIDC server calls)
   const excludedUrls = [
     '/.well-known/openid-configuration',
     '/protocol/openid-connect/token',
@@ -361,14 +360,19 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     return next(req);
   }
 
-  // Get the access token from AuthService
-  const token = authService.accessToken;
+  const token = oauthService.getAccessToken();
 
-  if (token) {
-    const headers = req.headers.set('Authorization', `Bearer ${token}`);
-    const authReq = req.clone({ headers });
-    return next(authReq);
-  }
+  const authReq = token
+    ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } })
+    : req;
 
-  return next(req);
+  return next(authReq).pipe(
+    catchError((error: HttpErrorResponse) => {
+      if (error.status === 401) {
+        // Token is invalid/expired -> trigger login
+        oauthService.initLoginFlow();
+      }
+      return throwError(() => error);
+    })
+  );
 };
