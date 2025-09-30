@@ -1,0 +1,293 @@
+// src/app/encrypted-oauth-storage.ts
+import { OAuthStorage } from 'angular-oauth2-oidc';
+
+/**
+ * Example OAuthStorage wrapper that uses sessionStorage.
+ * Replace with angular-secure-storage or your own encryption library for production.
+ */
+export class EncryptedOAuthStorage implements OAuthStorage {
+  private prefix = 'oauth_';
+
+  getItem(key: string): string | null {
+    const v = sessionStorage.getItem(this.prefix + key);
+    if (!v) return null;
+    // Example: you could decrypt here. For demo we return directly.
+    return v;
+  }
+
+  removeItem(key: string): void {
+    sessionStorage.removeItem(this.prefix + key);
+  }
+
+  setItem(key: string, data: string): void {
+    // Example: you could encrypt here before storing.
+    sessionStorage.setItem(this.prefix + key, data);
+  }
+}
+
+
+
+
+
+
+
+
+// src/app/auth.service.ts
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpParams, HttpHeaders } from '@angular/common/http';
+import { OAuthService, AuthConfig, JwksValidationHandler, OAuthEvent } from 'angular-oauth2-oidc';
+import { authConfig } from './auth-config';
+import { EncryptedOAuthStorage } from './encrypted-oauth-storage';
+import { filter } from 'rxjs/operators';
+
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+  private revokeEndpoint: string | undefined;
+
+  constructor(private oauthService: OAuthService, private http: HttpClient) {
+    // provide config & storage
+    this.oauthService.configure(authConfig as AuthConfig);
+
+    // set custom storage (sessionStorage wrapper)
+    this.oauthService.setStorage(new EncryptedOAuthStorage());
+
+    // optional: token validation handler (for id_token signature checks)
+    // this.oauthService.tokenValidationHandler = new JwksValidationHandler();
+
+    // listen for events (optional: for debug and to trigger silent refresh)
+    this.oauthService.events
+      .pipe(filter((e: OAuthEvent) => !!e))
+      .subscribe(e => {
+        // example debug:
+        // console.debug('oauth event', e);
+      });
+  }
+
+  /**
+   * Initialize authentication flows on app startup.
+   * If there are no valid tokens, this will redirect to the IdP automatically.
+   *
+   * Two options:
+   *  - loadDiscoveryDocumentAndTryLogin(): returns to app if tokens present
+   *  - loadDiscoveryDocumentAndLogin(): directly redirect to login if no tokens
+   */
+  async initAuth(autoLoginIfNotSignedIn = true) {
+    await this.oauthService.loadDiscoveryDocumentAndTryLogin();
+
+    // get revocation endpoint from discovery if available
+    const discovery: any = this.oauthService.discoveryDocument;
+    if (discovery && discovery.revocation_endpoint) {
+      this.revokeEndpoint = discovery.revocation_endpoint;
+    }
+
+    // If no valid access token and caller wants to auto-login, redirect to IdP:
+    if (!this.oauthService.hasValidAccessToken() && autoLoginIfNotSignedIn) {
+      // use loadDiscoveryDocumentAndLogin to avoid showing the intermediate login form
+      // It will redirect the user to the IdP login page immediately.
+      await this.oauthService.loadDiscoveryDocumentAndLogin();
+    } else {
+      // Start automatic silent refresh to keep tokens alive
+      this.setupSilentRefresh();
+    }
+  }
+
+  login() {
+    // starts the authorization flow (PKCE & code flow are used based on authConfig)
+    this.oauthService.initCodeFlow();
+  }
+
+  async logout() {
+    // Revoke tokens (access & refresh) if possible, then log out
+    try {
+      await this.revokeTokens();
+    } catch (err) {
+      console.warn('revoke tokens failed', err);
+    } finally {
+      // clears session storage and optionally calls end session endpoint
+      this.oauthService.logOut();
+    }
+  }
+
+  async revokeTokens() {
+    // If OAuth library supports revokeTokenAndLogout, you can call it:
+    if ((this.oauthService as any).revokeTokenAndLogout) {
+      try {
+        // library helper (some versions)
+        await (this.oauthService as any).revokeTokenAndLogout();
+        return;
+      } catch (err) {
+        // fallthrough to manual revoke
+      }
+    }
+
+    // Manual revocation (RFC 7009) — POST to revocation endpoint
+    if (!this.revokeEndpoint) {
+      console.warn('No revocation endpoint discovered.');
+      return;
+    }
+
+    // revoke refresh token first (if applicable)
+    const refreshToken = this.oauthService.getRefreshToken();
+    if (refreshToken) {
+      await this.postRevoke(refreshToken);
+    }
+
+    // then revoke access token
+    const accessToken = this.oauthService.getAccessToken();
+    if (accessToken) {
+      await this.postRevoke(accessToken);
+    }
+  }
+
+  private async postRevoke(token: string) {
+    const body = new HttpParams().set('token', token);
+    const headers = new HttpHeaders({
+      'Content-Type': 'application/x-www-form-urlencoded'
+    });
+    // Some IdPs require client_id or client authentication. SPAs normally should not use a client_secret.
+    await this.http.post(this.revokeEndpoint!, body.toString(), { headers, withCredentials: true }).toPromise();
+  }
+
+  get accessToken() {
+    return this.oauthService.getAccessToken();
+  }
+
+  get idTokenClaims() {
+    return this.oauthService.getIdentityClaims();
+  }
+
+  isLoggedIn(): boolean {
+    return this.oauthService.hasValidAccessToken();
+  }
+
+  setupSilentRefresh() {
+    // Two approaches:
+    // 1) iframe-based silent refresh (classic)
+    // 2) refresh-token rotation (server must support refresh tokens for SPAs)
+    //
+    // Try automatic silent refresh via iframe first:
+    try {
+      // will create a hidden iframe and attempt silent refresh with the IdP.
+      this.oauthService.setupAutomaticSilentRefresh({
+        // timeout factor (ms) before expiration to attempt refresh:
+        timeoutFactor: 0.75,
+        // use iframe handler
+        silentRefreshMethod: 'iframe'
+      });
+    } catch (err) {
+      console.warn('automatic silent refresh not available or failed to setup', err);
+    }
+
+    // If your IdP issues refresh tokens to the SPA (offline_access),
+    // you can optionally use refresh token rotation on the server and call useRefreshToken = true:
+    // this.oauthService.setupAutomaticSilentRefresh({ useRefreshToken: true });
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+// src/app/app.component.ts
+import { Component } from '@angular/core';
+import { bootstrapApplication } from '@angular/platform-browser';
+import { provideHttpClient } from '@angular/common/http';
+import { RouterModule, Routes } from '@angular/router';
+import { AuthService } from './auth.service';
+import { authGuard } from './auth.guard';
+
+@Component({
+  selector: 'app-root',
+  standalone: true,
+  imports: [RouterModule],
+  template: `
+    <div *ngIf="auth.isLoggedIn(); else loggedOut">
+      <h3>Welcome!</h3>
+      <p>Access token: {{ auth.accessToken ? (auth.accessToken | slice:0:40) + '...' : 'none' }}</p>
+      <button (click)="logout()">Logout</button>
+    </div>
+    <ng-template #loggedOut>
+      <p>Redirecting to login...</p>
+    </ng-template>
+    <router-outlet></router-outlet>
+  `
+})
+export class AppComponent {
+  constructor(public auth: AuthService) {
+    // initialize auth immediately on app start; this will redirect to login if no tokens
+    // Pass `true` to auto redirect to login if not signed in.
+    this.auth.initAuth(true).catch(err => console.error('initAuth failed', err));
+  }
+
+  logout() {
+    this.auth.logout();
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+// src/main.ts
+import { importProvidersFrom } from '@angular/core';
+import { bootstrapApplication } from '@angular/platform-browser';
+import { provideRouter, Route } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+import { AppComponent } from './app/app.component';
+import { authGuard } from './app/auth.guard';
+
+const routes: Route[] = [
+  {
+    path: '',
+    loadComponent: () => import('./app/app.component').then(m => m.AppComponent)
+  },
+  // protected route example:
+  {
+    path: 'secure',
+    loadComponent: () => import('./app/secure.component').then(m => m.SecureComponent),
+    canActivate: [authGuard]
+  }
+];
+
+bootstrapApplication(AppComponent, {
+  providers: [
+    provideHttpClient(),
+    provideRouter(routes)
+  ]
+}).catch(err => console.error(err));
+
+
+
+
+
+
+
+
+<!-- src/silent-refresh.html -->
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>silent-refresh</title>
+  </head>
+  <body>
+    <script>
+      // The angular-oauth2-oidc library expects the iframe target to exist.
+      // The IdP will redirect back to this page with tokens — the library picks it up.
+      // This file can be blank as long as it's a registered redirect URI on the IdP.
+    </script>
+  </body>
+</html>
