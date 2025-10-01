@@ -1,35 +1,15 @@
-setupSilentRefresh() {
-  try {
-    this.oauthService.setupAutomaticSilentRefresh({
-      timeoutFactor: 0.75,
-      silentRefreshMethod: "refresh_token"
-    });
+this.oauthService.refreshToken().then(resp => {
+  console.log("Refresh response:", resp);
 
-    // Fix: ensure refresh always updates storage
-    this.oauthService.events.subscribe(e => {
-      if (e.type === 'token_received') {
-        console.log('✅ Silent refresh updated tokens at', new Date());
-      }
-      if (e.type === 'silent_refresh_error') {
-        console.warn('⚠️ Silent refresh failed, trying manual fallback...', e);
-
-        this.oauthService.refreshToken().then(resp => {
-          if (resp && resp['access_token']) {
-            this.oauthService.storeAccessTokenResponse(
-              resp['access_token'],
-              resp['refresh_token'],
-              resp['expires_in'],
-              resp['id_token'],
-              new Date()
-            );
-            console.log("✅ Tokens manually updated from refresh response");
-          }
-        }).catch(err => {
-          console.error("❌ Manual refresh failed:", err);
-        });
-      }
-    });
-  } catch (err) {
-    console.warn("❌ Automatic silent refresh setup failed", err);
+  if (resp && resp['access_token']) {
+    this.oauthService.processIdToken(resp['id_token'], resp['access_token'])
+      .then(result => {
+        this.oauthService.processAccessTokenResponse(
+          resp,               // the full JSON
+          result.idToken,     // parsed ID token
+          true                // save tokens
+        );
+        console.log("✅ Tokens updated in storage");
+      });
   }
-}
+});
