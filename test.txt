@@ -1,15 +1,42 @@
-this.oauthService.refreshToken().then(resp => {
-  console.log("Refresh response:", resp);
+setupSilentRefresh() {
+  try {
+    // Subscribe to OAuth events
+    this.oauthService.events.subscribe(e => {
+      if (e.type === 'token_received') {
+        console.log('✅ Token refreshed & stored at', new Date());
+      }
 
-  if (resp && resp['access_token']) {
-    this.oauthService.processIdToken(resp['id_token'], resp['access_token'])
-      .then(result => {
-        this.oauthService.processAccessTokenResponse(
-          resp,               // the full JSON
-          result.idToken,     // parsed ID token
-          true                // save tokens
-        );
-        console.log("✅ Tokens updated in storage");
-      });
+      if (e.type === 'silent_refresh_error') {
+        console.warn('⚠️ Silent refresh failed, trying manual refresh...', e);
+
+        // Manual refresh fallback
+        this.oauthService.fetchTokenUsingGrant(
+          {
+            grant_type: 'refresh_token',
+            refresh_token: this.oauthService.getRefreshToken()!
+          },
+          undefined, // no extra headers
+          'http://localhost:8080/refresh' // 👈 custom endpoint
+        ).then(resp => {
+          console.log('✅ Manual refresh success, tokens updated', resp);
+        }).catch(err => {
+          console.error('❌ Manual refresh failed', err);
+        });
+      }
+
+      if (e.type === 'session_terminated') {
+        console.warn('⚠️ Session ended by server');
+      }
+    });
+
+    // Setup auto silent refresh using refresh_token method
+    this.oauthService.setupAutomaticSilentRefresh({
+      timeoutFactor: 0.75,          // refresh at 75% of token lifetime
+      silentRefreshMethod: 'refresh_token' // use refresh_token, not iframe
+    });
+
+    console.log('🔄 Silent refresh initialized');
+  } catch (err) {
+    console.warn('❌ Silent refresh setup failed', err);
   }
-});
+}
