@@ -1,42 +1,289 @@
-setupSilentRefresh() {
-  try {
-    // Subscribe to OAuth events
-    this.oauthService.events.subscribe(e => {
-      if (e.type === 'token_received') {
-        console.log('✅ Token refreshed & stored at', new Date());
-      }
+package com.example.jwtrbac.config;
 
-      if (e.type === 'silent_refresh_error') {
-        console.warn('⚠️ Silent refresh failed, trying manual refresh...', e);
+import org.springframework.util.ObjectUtils;
+import org.springframework.util.StringUtils;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
+import org.springframework.security.oauth2.core.OAuth2Error;
 
-        // Manual refresh fallback
-        this.oauthService.fetchTokenUsingGrant(
-          {
-            grant_type: 'refresh_token',
-            refresh_token: this.oauthService.getRefreshToken()!
-          },
-          undefined, // no extra headers
-          'http://localhost:8080/refresh' // 👈 custom endpoint
-        ).then(resp => {
-          console.log('✅ Manual refresh success, tokens updated', resp);
-        }).catch(err => {
-          console.error('❌ Manual refresh failed', err);
-        });
-      }
+import java.util.List;
 
-      if (e.type === 'session_terminated') {
-        console.warn('⚠️ Session ended by server');
-      }
-    });
+public class AudienceValidator implements OAuth2TokenValidator<Jwt> {
+    private final String expectedAudience;
+    private static final OAuth2Error ERROR = new OAuth2Error("invalid_token", "The required audience is missing", null);
 
-    // Setup auto silent refresh using refresh_token method
-    this.oauthService.setupAutomaticSilentRefresh({
-      timeoutFactor: 0.75,          // refresh at 75% of token lifetime
-      silentRefreshMethod: 'refresh_token' // use refresh_token, not iframe
-    });
+    public AudienceValidator(String expectedAudience) {
+        this.expectedAudience = expectedAudience;
+    }
 
-    console.log('🔄 Silent refresh initialized');
-  } catch (err) {
-    console.warn('❌ Silent refresh setup failed', err);
-  }
+    @Override
+    public OAuth2TokenValidatorResult validate(Jwt token) {
+        if (ObjectUtils.isEmpty(token)) {
+            return OAuth2TokenValidatorResult.failure(ERROR);
+        }
+
+        Object aud = token.getClaims().get("aud");
+        if (aud == null) {
+            return OAuth2TokenValidatorResult.failure(ERROR);
+        }
+
+        // aud can be String or List
+        if (aud instanceof String) {
+            if (((String) aud).equals(expectedAudience)) {
+                return OAuth2TokenValidatorResult.success();
+            }
+        } else if (aud instanceof List) {
+            @SuppressWarnings("unchecked")
+            List<Object> audList = (List<Object>) aud;
+            for (Object a : audList) {
+                if (a != null && expectedAudience.equals(a.toString())) {
+                    return OAuth2TokenValidatorResult.success();
+                }
+            }
+        }
+
+        return OAuth2TokenValidatorResult.failure(ERROR);
+    }
 }
+
+
+
+
+
+package com.example.jwtrbac.config;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+
+import org.springframework.security.oauth2.jwt.*;
+
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+
+@Configuration
+@EnableMethodSecurity(prePostEnabled = true)
+public class SecurityConfig {
+
+    @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}")
+    private String jwkSetUri;
+
+    @Value("${app.security.issuer}")
+    private String issuer;
+
+    @Value("${app.security.expected-audience}")
+    private String expectedAudience;
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .authorizeHttpRequests(authorize -> authorize
+                .requestMatchers("/public/**").permitAll()
+                .anyRequest().authenticated()
+            )
+            .csrf(csrf -> csrf.disable())
+            .oauth2ResourceServer(oauth2 -> oauth2
+                .jwt(jwt -> jwt
+                    .jwtAuthenticationConverter(jwtAuthenticationConverter())
+                )
+            );
+
+        return http.build();
+    }
+
+    @Bean
+    public JwtDecoder jwtDecoder() {
+        NimbusJwtDecoder jwtDecoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
+
+        // default issuer + time checks
+        OAuth2TokenValidator<Jwt> withIssuer = JwtValidators.createDefaultWithIssuer(issuer);
+
+        // custom aud validator
+        AudienceValidator audienceValidator = new AudienceValidator(expectedAudience);
+
+        OAuth2TokenValidator<Jwt> withAudience = new DelegatingOAuth2TokenValidator<>(withIssuer, audienceValidator);
+        jwtDecoder.setJwtValidator(withAudience);
+
+        return jwtDecoder;
+    }
+
+    /**
+     * Convert JWT claims to Spring Security authorities.
+     * This maps the claim "entitlements" (or "roles") into authorities prefixed by ROLE_.
+     */
+    private JwtAuthenticationConverter jwtAuthenticationConverter() {
+        JwtGrantedAuthoritiesConverter grantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
+        // set the claim name your IDP uses (e.g., "entitlements", "roles", "permissions")
+        grantedAuthoritiesConverter.setAuthoritiesClaimName("entitlements");
+        // prefix if you want to use hasRole('X') checks: ROLE_ becomes implicit
+        grantedAuthoritiesConverter.setAuthorityPrefix("ROLE_");
+
+        JwtAuthenticationConverter jwtConverter = new JwtAuthenticationConverter();
+        jwtConverter.setJwtGrantedAuthoritiesConverter(grantedAuthoritiesConverter);
+        return jwtConverter;
+    }
+}
+
+
+
+
+
+
+package com.example.jwtrbac.service;
+
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+
+/**
+ * Fine-grained authorization checks based on token claims like branch, country, entitlements etc.
+ * Use these checks in @PreAuthorize expressions: @customAuth.hasAccess(authentication, #branch)
+ */
+@Component("customAuth")
+public class CustomAuthorizationService {
+
+    /**
+     * Example: check token claim "branch" equals requested branch.
+     */
+    public boolean hasAccess(JwtAuthenticationToken authentication, String branch) {
+        if (authentication == null || branch == null) {
+            return false;
+        }
+
+        Object claim = authentication.getToken().getClaims().get("branch");
+        if (claim == null) return false;
+        return branch.equals(claim.toString());
+    }
+
+    /**
+     * Example: check that the token has a particular entitlement in claim "entitlements".
+     */
+    @SuppressWarnings("unchecked")
+    public boolean hasEntitlement(JwtAuthenticationToken authentication, String entitlement) {
+        if (authentication == null || entitlement == null) return false;
+        Object ent = authentication.getToken().getClaims().get("entitlements");
+        if (ent instanceof List) {
+            List<?> list = (List<?>) ent;
+            return list.stream().anyMatch(item -> entitlement.equals(item.toString()));
+        } else if (ent != null) {
+            return entitlement.equals(ent.toString());
+        }
+        return false;
+    }
+}
+
+
+
+
+
+
+
+
+package com.example.jwtrbac.service;
+
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.stereotype.Component;
+
+import java.time.Instant;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * Minimal audit logging: do NOT log the entire JWT. Log only minimal identity information.
+ */
+@Component
+public class AuditLogger {
+    private static final Logger logger = LoggerFactory.getLogger(AuditLogger.class);
+
+    public void logAccess(Jwt jwt, String action) {
+        if (jwt == null) {
+            logger.info("Anonymous performed {} at {}", action, Instant.now());
+            return;
+        }
+
+        // minimal info: subject and maybe a user-friendly name claim
+        String sub = jwt.getSubject();
+        String preferredName = (jwt.getClaims().get("preferred_username") != null)
+                ? jwt.getClaims().get("preferred_username").toString()
+                : null;
+
+        if (preferredName != null) {
+            logger.info("User [{}|{}] performed [{}] at {}", sub, preferredName, action, Instant.now());
+        } else {
+            logger.info("User [{}] performed [{}] at {}", sub, action, Instant.now());
+        }
+    }
+}
+
+
+
+
+
+package com.example.jwtrbac.controller;
+
+import com.example.jwtrbac.service.AuditLogger;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.web.bind.annotation.*;
+
+import com.example.jwtrbac.service.CustomAuthorizationService;
+import org.springframework.beans.factory.annotation.Autowired;
+
+/**
+ * Example endpoints:
+ * - GET /api/data  -> requires READ role
+ * - POST /api/data -> requires WRITE role
+ * - GET /api/branch/{branch}/data -> uses fine-grained check (branch equality)
+ */
+@RestController
+@RequestMapping("/api")
+public class ApiController {
+
+    @Autowired
+    private AuditLogger auditLogger;
+
+    @Autowired
+    private CustomAuthorizationService customAuth;
+
+    @GetMapping("/public/hello")
+    public String publicHello() {
+        return "hello public";
+    }
+
+    @PreAuthorize("hasRole('READ')")
+    @GetMapping("/data")
+    public String getData(JwtAuthenticationToken authentication) {
+        if (authentication != null) {
+            auditLogger.logAccess(authentication.getToken(), "GET /api/data");
+        }
+        return "Data read";
+    }
+
+    @PreAuthorize("hasRole('WRITE')")
+    @PostMapping("/data")
+    public String createData(JwtAuthenticationToken authentication) {
+        if (authentication != null) {
+            auditLogger.logAccess(authentication.getToken(), "POST /api/data");
+        }
+        return "Data created";
+    }
+
+    // Fine-grained policy example
+    @PreAuthorize("@customAuth.hasAccess(authentication, #branch)")
+    @GetMapping("/branch/{branch}/data")
+    public String getBranchData(@PathVariable String branch, JwtAuthenticationToken authentication) {
+        if (authentication != null) {
+            auditLogger.logAccess(authentication.getToken(), "GET /api/branch/" + branch + "/data");
+        }
+        return "Data for branch " + branch;
+    }
+}
+
+
