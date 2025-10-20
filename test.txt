@@ -7,3 +7,13 @@ getPlainTextPreview(html: string): string {
   }
   return '';
 }
+
+
+let previewContent = editorContent.replace(/{{([^}]+)}}/g, (match: any, key: string) => {
+  const match2 = this.variables.find(
+    (item) =>
+      item.variableName + '_' + item.groupName === key.trim() ||
+      item.variableId === key.trim()
+  );
+  return match2?.variableValue ?? match;
+});
