@@ -1,59 +1,36 @@
-npm install html-docx-js-typescript file-saver
 
+downloadAsWord() {
+  const contentString = this.htmlContent;
 
-import { Component } from '@angular/core';
-import * as FileSaver from 'file-saver';
-import * as HTMLDocx from 'html-docx-js-typescript';
-
-@Component({
-  selector: 'app-root',
-  templateUrl: './app.component.html',
-  styleUrls: ['./app.component.css']
-})
-export class AppComponent {
-  htmlContent: string = `
-    <h1 style="color:darkblue;">Hello Aditya!</h1>
-    <p>This is a <b>sample HTML content</b> you can export to HTML or DOCX format.</p>
-    <ul><li>Point 1</li><li>Point 2</li></ul>
+  const fullHtml = `
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <meta charset="UTF-8">
+      <style>
+        body { font-family: Arial, sans-serif; font-size: 14px; }
+        h1 { color: darkblue; }
+      </style>
+    </head>
+    <body>${contentString}</body>
+  </html>
   `;
 
-  // ✅ Save as HTML file
-  saveAsHtml() {
-    const blob = new Blob([this.htmlContent], { type: 'text/html;charset=utf-8' });
-    FileSaver.saveAs(blob, 'content.html');
-  }
+  console.log('Full HTML:', fullHtml);
 
-  // ✅ Save as DOCX file
-  saveAsDocx() {
-    const docxBlob = HTMLDocx.asBlob(this.htmlContent);
-    FileSaver.saveAs(docxBlob, 'content.docx');
+  try {
+    const HTMLDocxJs = (HTMLDocx as any).default || HTMLDocx;
+    const docxBlob = HTMLDocxJs.asBlob(fullHtml);
+
+    console.log('docxBlob:', docxBlob);
+
+    if (!(docxBlob instanceof Blob)) {
+      console.error('Failed to create a valid Blob object.');
+      return;
+    }
+
+    FileSaver.saveAs(docxBlob, 'template.docx');
+  } catch (err) {
+    console.error('Error creating DOCX:', err);
   }
 }
-
-
-
-
-<div class="container" style="margin: 20px;">
-  <h2>Export HTML Content Example</h2>
-
-  <textarea [(ngModel)]="htmlContent" rows="8" cols="80"></textarea>
-
-  <div style="margin-top: 15px;">
-    <button (click)="saveAsHtml()">Download as HTML</button>
-    <button (click)="saveAsDocx()">Download as DOCX</button>
-  </div>
-
-  <hr />
-  <h3>Preview:</h3>
-  <div [innerHTML]="htmlContent" style="border:1px solid #ccc; padding:10px;"></div>
-</div>
-
-
-
-
-
-
-
-
-
-
