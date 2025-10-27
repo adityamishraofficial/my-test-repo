@@ -1,19 +1,59 @@
-getPlainTextPreview(html: string): string {
-  if (isPlatformBrowser(this.platformId)) {
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-    const plainText = doc.body.textContent || '';
-    return plainText.substring(0, 20) + (plainText.length > 20 ? '...' : '');
+npm install html-docx-js-typescript file-saver
+
+
+import { Component } from '@angular/core';
+import * as FileSaver from 'file-saver';
+import * as HTMLDocx from 'html-docx-js-typescript';
+
+@Component({
+  selector: 'app-root',
+  templateUrl: './app.component.html',
+  styleUrls: ['./app.component.css']
+})
+export class AppComponent {
+  htmlContent: string = `
+    <h1 style="color:darkblue;">Hello Aditya!</h1>
+    <p>This is a <b>sample HTML content</b> you can export to HTML or DOCX format.</p>
+    <ul><li>Point 1</li><li>Point 2</li></ul>
+  `;
+
+  // ✅ Save as HTML file
+  saveAsHtml() {
+    const blob = new Blob([this.htmlContent], { type: 'text/html;charset=utf-8' });
+    FileSaver.saveAs(blob, 'content.html');
   }
-  return '';
+
+  // ✅ Save as DOCX file
+  saveAsDocx() {
+    const docxBlob = HTMLDocx.asBlob(this.htmlContent);
+    FileSaver.saveAs(docxBlob, 'content.docx');
+  }
 }
 
 
-let previewContent = editorContent.replace(/{{([^}]+)}}/g, (match: any, key: string) => {
-  const match2 = this.variables.find(
-    (item) =>
-      item.variableName + '_' + item.groupName === key.trim() ||
-      item.variableId === key.trim()
-  );
-  return match2?.variableValue ?? match;
-});
+
+
+<div class="container" style="margin: 20px;">
+  <h2>Export HTML Content Example</h2>
+
+  <textarea [(ngModel)]="htmlContent" rows="8" cols="80"></textarea>
+
+  <div style="margin-top: 15px;">
+    <button (click)="saveAsHtml()">Download as HTML</button>
+    <button (click)="saveAsDocx()">Download as DOCX</button>
+  </div>
+
+  <hr />
+  <h3>Preview:</h3>
+  <div [innerHTML]="htmlContent" style="border:1px solid #ccc; padding:10px;"></div>
+</div>
+
+
+
+
+
+
+
+
+
+
