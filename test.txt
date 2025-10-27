@@ -1,36 +1,79 @@
+import { Component, OnInit, signal } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
+import { HttpService } from './http-service';
+import { BaseballPlayer } from './baseball-player';
+import { BaseballCard } from './baseball-card/baseball-card';
+import { CommonModule } from '@angular/common';
+import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import * as FileSaver from 'file-saver';
+import { asBlob } from 'html-docx-js-typescript';
 
-downloadAsWord() {
-  const contentString = this.htmlContent;
 
-  const fullHtml = `
-  <!DOCTYPE html>
-  <html>
-    <head>
-      <meta charset="UTF-8">
-      <style>
-        body { font-family: Arial, sans-serif; font-size: 14px; }
-        h1 { color: darkblue; }
-      </style>
-    </head>
-    <body>${contentString}</body>
-  </html>
-  `;
+@Component({
+  selector: 'app-root',
+  imports: [ CommonModule, ReactiveFormsModule],
+  templateUrl: './app.html',
+  styleUrl: './app.css'
+})
+export class App {
+    htmlContent: string = `
+  <div class="export-content" style="font-family: Arial; color: #333;">
+    <h2>My Exportable HTML Content</h2>
+    <p>This content will be exported as <strong>PDF</strong> and <em>DOCX</em>.</p>
+    <ul>
+      <li>Supports formatting</li>
+      <li>Lists, headers, and paragraphs</li>
+      <li>Works great with Angular</li>
+    </ul>
+  </div>`;
 
-  console.log('Full HTML:', fullHtml);
+  async exportPDF() {
+    // Create a hidden container for rendering HTML string
+    const container = document.createElement('div');
+    container.innerHTML = this.htmlContent;
+    container.style.position = 'fixed';
+    container.style.left = '-9999px';
+    document.body.appendChild(container);
 
-  try {
-    const HTMLDocxJs = (HTMLDocx as any).default || HTMLDocx;
-    const docxBlob = HTMLDocxJs.asBlob(fullHtml);
+    // Convert to canvas → PDF
+    const canvas = await html2canvas(container, { scale: 2 });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const imgWidth = 210;
+    const pageHeight = 297;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    let heightLeft = imgHeight;
+    let position = 0;
 
-    console.log('docxBlob:', docxBlob);
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
 
-    if (!(docxBlob instanceof Blob)) {
-      console.error('Failed to create a valid Blob object.');
-      return;
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
     }
 
-    FileSaver.saveAs(docxBlob, 'template.docx');
-  } catch (err) {
-    console.error('Error creating DOCX:', err);
+    pdf.save('exported-file.pdf');
+    document.body.removeChild(container);
   }
+
+ async exportDOCX() {
+    try {
+      // ✅ use only inner HTML, no <html><body> wrappers
+      const blob = await asBlob(this.htmlContent);
+      FileSaver.saveAs(blob, 'exported-file.docx');
+    } catch (err) {
+      console.error('DOCX export failed:', err);
+    }
 }
+}
+
+
+
+
+
+npm install html2pdf.js html-docx-js-typescript file-saver
