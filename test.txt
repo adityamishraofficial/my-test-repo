@@ -1,79 +1,18 @@
-import { Component, OnInit, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
-import { HttpService } from './http-service';
-import { BaseballPlayer } from './baseball-player';
-import { BaseballCard } from './baseball-card/baseball-card';
-import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
-import * as FileSaver from 'file-saver';
-import { asBlob } from 'html-docx-js-typescript';
+@Bean
+public CorsConfigurationSource corsConfigurationSource() {
+    CorsConfiguration configuration = new CorsConfiguration();
+    configuration.setAllowedOrigins(List.of(
+        "http://localhost:4200",
+        "http://localhost:4201",
+        "https://drafting-engine.dev.echonet",
+        "https://drafting-engine-int.dev.echonet",
+        "https://drafting-engine-uat.dev.echonet"
+    ));
+    configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+    configuration.setAllowedHeaders(List.of("*"));
+    configuration.setAllowCredentials(true);
 
-
-@Component({
-  selector: 'app-root',
-  imports: [ CommonModule, ReactiveFormsModule],
-  templateUrl: './app.html',
-  styleUrl: './app.css'
-})
-export class App {
-    htmlContent: string = `
-  <div class="export-content" style="font-family: Arial; color: #333;">
-    <h2>My Exportable HTML Content</h2>
-    <p>This content will be exported as <strong>PDF</strong> and <em>DOCX</em>.</p>
-    <ul>
-      <li>Supports formatting</li>
-      <li>Lists, headers, and paragraphs</li>
-      <li>Works great with Angular</li>
-    </ul>
-  </div>`;
-
-  async exportPDF() {
-    // Create a hidden container for rendering HTML string
-    const container = document.createElement('div');
-    container.innerHTML = this.htmlContent;
-    container.style.position = 'fixed';
-    container.style.left = '-9999px';
-    document.body.appendChild(container);
-
-    // Convert to canvas → PDF
-    const canvas = await html2canvas(container, { scale: 2 });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const imgWidth = 210;
-    const pageHeight = 297;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    let heightLeft = imgHeight;
-    let position = 0;
-
-    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-    }
-
-    pdf.save('exported-file.pdf');
-    document.body.removeChild(container);
-  }
-
- async exportDOCX() {
-    try {
-      // ✅ use only inner HTML, no <html><body> wrappers
-      const blob = await asBlob(this.htmlContent);
-      FileSaver.saveAs(blob, 'exported-file.docx');
-    } catch (err) {
-      console.error('DOCX export failed:', err);
-    }
+    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+    source.registerCorsConfiguration("/**", configuration);
+    return source;
 }
-}
-
-
-
-
-
-npm install html2pdf.js html-docx-js-typescript file-saver
