@@ -1,18 +1,63 @@
-@Bean
-public CorsConfigurationSource corsConfigurationSource() {
-    CorsConfiguration configuration = new CorsConfiguration();
-    configuration.setAllowedOrigins(List.of(
-        "http://localhost:4200",
-        "http://localhost:4201",
-        "https://drafting-engine.dev.echonet",
-        "https://drafting-engine-int.dev.echonet",
-        "https://drafting-engine-uat.dev.echonet"
-    ));
-    configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-    configuration.setAllowedHeaders(List.of("*"));
-    configuration.setAllowCredentials(true);
+import { Injectable } from '@angular/core';
+import { OAuthService } from 'angular-oauth2-oidc';
 
-    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-    source.registerCorsConfiguration("/**", configuration);
-    return source;
+@Injectable()
+export class CustomOAuthService extends OAuthService {
+
+  /**
+   * Override the method that exchanges the authorization code for tokens.
+   * This is where you can inject custom parameters for the /token request.
+   */
+  protected async fetchTokenUsingGrantCode(code: string): Promise<object> {
+    // 👇 Add your custom parameters here
+    const customParams = {
+      client_id: this.clientId,
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: this.redirectUri,
+      code_verifier: this.pkceVerifier,
+      custom_param_1: 'value1',
+      custom_param_2: 'value2'
+    };
+
+    const body = new URLSearchParams(customParams as any).toString();
+
+    const headers = new Headers({
+      'Content-Type': 'application/x-www-form-urlencoded'
+    });
+
+    const response = await fetch(this.tokenEndpoint!, {
+      method: 'POST',
+      body,
+      headers
+    });
+
+    const tokenResponse = await response.json();
+    this.storeAccessTokenResponse(tokenResponse);
+    return tokenResponse;
+  }
 }
+
+
+
+import { CustomOAuthService } from './services/custom-oauth.service';
+
+@NgModule({
+  providers: [
+    { provide: OAuthService, useClass: CustomOAuthService }
+  ]
+})
+export class AppModule {}
+
+
+
+bootstrapApplication(AppComponent, {
+  providers: [
+    { provide: OAuthService, useClass: CustomOAuthService }
+  ]
+});
+
+
+
+
+
