@@ -1,19 +1,15 @@
 import { Injectable } from '@angular/core';
-import { OAuthService } from 'angular-oauth2-oidc';
+import { OAuthService, ParsedIdToken } from 'angular-oauth2-oidc';
 
 @Injectable()
 export class CustomOAuthService extends OAuthService {
 
-  /**
-   * Override the method that exchanges the authorization code for tokens.
-   * This lets us inject custom parameters for the /token request.
-   */
   protected async fetchTokenUsingGrantCode(code: string): Promise<object> {
 
-    // ✅ Get PKCE verifier dynamically (it's stored in localStorage/sessionStorage)
+    // ✅ Get PKCE verifier dynamically
     const pkceVerifier = sessionStorage.getItem('PKCE_verifier') || localStorage.getItem('PKCE_verifier');
 
-    // ✅ Add your custom parameters here
+    // ✅ Add your custom parameters
     const customParams: Record<string, string> = {
       client_id: this.clientId,
       grant_type: 'authorization_code',
@@ -30,6 +26,7 @@ export class CustomOAuthService extends OAuthService {
       'Content-Type': 'application/x-www-form-urlencoded'
     });
 
+    // ✅ Perform token request
     const response = await fetch(this.tokenEndpoint!, {
       method: 'POST',
       body,
@@ -37,7 +34,21 @@ export class CustomOAuthService extends OAuthService {
     });
 
     const tokenResponse = await response.json();
-    this.storeAccessTokenResponse(tokenResponse);
+
+    // ✅ Use correct signature for storeAccessTokenResponse
+    this.storeAccessTokenResponse(
+      tokenResponse.access_token,
+      tokenResponse.refresh_token,
+      tokenResponse.expires_in,
+      tokenResponse.scope
+    );
+
+    // ✅ Also handle ID token if returned
+    if (tokenResponse.id_token) {
+      const parsedIdToken = this.processIdToken(tokenResponse.id_token, tokenResponse.access_token);
+      this.storeIdToken(tokenResponse.id_token, parsedIdToken);
+    }
+
     return tokenResponse;
   }
 }
