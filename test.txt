@@ -6,16 +6,20 @@ export class CustomOAuthService extends OAuthService {
 
   /**
    * Override the method that exchanges the authorization code for tokens.
-   * This is where you can inject custom parameters for the /token request.
+   * This lets us inject custom parameters for the /token request.
    */
   protected async fetchTokenUsingGrantCode(code: string): Promise<object> {
-    // 👇 Add your custom parameters here
-    const customParams = {
+
+    // ✅ Get PKCE verifier dynamically (it's stored in localStorage/sessionStorage)
+    const pkceVerifier = sessionStorage.getItem('PKCE_verifier') || localStorage.getItem('PKCE_verifier');
+
+    // ✅ Add your custom parameters here
+    const customParams: Record<string, string> = {
       client_id: this.clientId,
       grant_type: 'authorization_code',
       code,
       redirect_uri: this.redirectUri,
-      code_verifier: this.pkceVerifier,
+      ...(pkceVerifier ? { code_verifier: pkceVerifier } : {}),
       custom_param_1: 'value1',
       custom_param_2: 'value2'
     };
