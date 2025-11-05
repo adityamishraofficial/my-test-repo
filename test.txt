@@ -1,55 +1,27 @@
 import { Injectable } from '@angular/core';
-import { OAuthService, ParsedIdToken } from 'angular-oauth2-oidc';
+import { OAuthService, TokenResponse } from 'angular-oauth2-oidc';
+import { HttpHeaders } from '@angular/common/http';
 
 @Injectable()
-export class CustomOAuthService extends OAuthService {
+export class CustomAuthService extends OAuthService {
 
-  protected async fetchTokenUsingGrantCode(code: string): Promise<object> {
+  // ✅ Properly override the parent method
+  protected override async fetchTokenUsingGrant(
+    grantType: string,
+    parameters: Record<string, string>,
+    headers?: HttpHeaders
+  ): Promise<TokenResponse> {
 
-    // ✅ Get PKCE verifier dynamically
-    const pkceVerifier = sessionStorage.getItem('PKCE_verifier') || localStorage.getItem('PKCE_verifier');
+    console.log('%c🔥 Custom fetchTokenUsingGrant called', 'color: lime; font-weight: bold');
 
-    // ✅ Add your custom parameters
-    const customParams: Record<string, string> = {
-      client_id: this.clientId,
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: this.redirectUri,
-      ...(pkceVerifier ? { code_verifier: pkceVerifier } : {}),
-      custom_param_1: 'value1',
-      custom_param_2: 'value2'
-    };
-
-    const body = new URLSearchParams(customParams as any).toString();
-
-    const headers = new Headers({
-      'Content-Type': 'application/x-www-form-urlencoded'
-    });
-
-    // ✅ Perform token request
-    const response = await fetch(this.tokenEndpoint!, {
-      method: 'POST',
-      body,
-      headers
-    });
-
-    const tokenResponse = await response.json();
-
-    // ✅ Use correct signature for storeAccessTokenResponse
-    this.storeAccessTokenResponse(
-      tokenResponse.access_token,
-      tokenResponse.refresh_token,
-      tokenResponse.expires_in,
-      tokenResponse.scope
-    );
-
-    // ✅ Also handle ID token if returned
-    if (tokenResponse.id_token) {
-      const parsedIdToken = this.processIdToken(tokenResponse.id_token, tokenResponse.access_token);
-      this.storeIdToken(tokenResponse.id_token, parsedIdToken);
+    // 🧩 Inject your custom parameters only for the token request
+    if (grantType === 'authorization_code') {
+      parameters['custom_param_1'] = 'value1';
+      parameters['custom_param_2'] = 'value2';
     }
 
-    return tokenResponse;
+    // 🔁 Call the original implementation from the base class
+    return super.fetchTokenUsingGrant(grantType, parameters, headers);
   }
 }
 
