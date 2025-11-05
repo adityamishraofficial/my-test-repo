@@ -1,50 +1,57 @@
+
+
 import { Injectable } from '@angular/core';
-import { OAuthService, TokenResponse } from 'angular-oauth2-oidc';
-import { HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { OAuthService } from 'angular-oauth2-oidc';
+import { lastValueFrom } from 'rxjs';
 
-@Injectable()
-export class CustomAuthService extends OAuthService {
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+  constructor(private oauthService: OAuthService, private http: HttpClient) {}
 
-  // ✅ Properly override the parent method
-  protected override async fetchTokenUsingGrant(
-    grantType: string,
-    parameters: Record<string, string>,
-    headers?: HttpHeaders
-  ): Promise<TokenResponse> {
+  login(): void {
+    // Start the redirect to SSO (standard)
+    this.oauthService.initCodeFlow();
+  }
 
-    console.log('%c🔥 Custom fetchTokenUsingGrant called', 'color: lime; font-weight: bold');
+  async handleRedirectAndExchangeToken(): Promise<void> {
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get('code');
+    if (!code) return;
 
-    // 🧩 Inject your custom parameters only for the token request
-    if (grantType === 'authorization_code') {
-      parameters['custom_param_1'] = 'value1';
-      parameters['custom_param_2'] = 'value2';
+    console.log('✅ Authorization code received:', code);
+
+    // Stop the default token call by NOT calling tryLoginCodeFlow()
+    // Instead, call token endpoint manually:
+    const body = new HttpParams({
+      fromObject: {
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: this.oauthService.redirectUri!,
+        client_id: this.oauthService.clientId!,
+        // 👇 your custom params
+        custom_param_1: 'value1',
+        custom_param_2: 'value2',
+        code_verifier: sessionStorage.getItem('PKCE_verifier') || ''
+      }
+    });
+
+    const tokenUrl = this.oauthService.tokenEndpoint!;
+    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+
+    try {
+      const response: any = await lastValueFrom(this.http.post(tokenUrl, body, { headers }));
+
+      console.log('%c✅ Custom token exchange successful', 'color:limegreen', response);
+
+      // Let angular-oauth2-oidc manage token lifecycle from now on
+      this.oauthService.processIdToken(response);
+      this.oauthService.processAccessTokenResponse(response, null);
+
+      // Optional: clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } catch (err) {
+      console.error('❌ Custom token request failed', err);
     }
-
-    // 🔁 Call the original implementation from the base class
-    return super.fetchTokenUsingGrant(grantType, parameters, headers);
   }
 }
-
-
-
-import { CustomOAuthService } from './services/custom-oauth.service';
-
-@NgModule({
-  providers: [
-    { provide: OAuthService, useClass: CustomOAuthService }
-  ]
-})
-export class AppModule {}
-
-
-
-bootstrapApplication(AppComponent, {
-  providers: [
-    { provide: OAuthService, useClass: CustomOAuthService }
-  ]
-});
-
-
-
-
-
