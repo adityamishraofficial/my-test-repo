@@ -1,57 +1,39 @@
 
 
-import { Injectable } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
-import { OAuthService } from 'angular-oauth2-oidc';
-import { lastValueFrom } from 'rxjs';
+import com.nimbusds.jose.jwk.source.RemoteJWKSet;
+import com.nimbusds.jose.jwk.source.JWKSource;
+import com.nimbusds.jose.proc.SecurityContext;
+import com.nimbusds.jose.util.DefaultResourceRetriever;
+import org.springframework.security.oauth2.jwt.*;
+import java.net.URL;
 
-@Injectable({ providedIn: 'root' })
-export class AuthService {
-  constructor(private oauthService: OAuthService, private http: HttpClient) {}
+@Bean
+public JwtDecoder jwtDecoder() throws Exception {
+    String jwkSetUri = "<your JWK Set URI>";
+    String issuer = "<your issuer>";
+    String expectedAudience = "<your audience>";
 
-  login(): void {
-    // Start the redirect to SSO (standard)
-    this.oauthService.initCodeFlow();
-  }
+    // Configure timeouts and cache duration (in ms)
+    int connectTimeout = 2000;
+    int readTimeout = 2000;
+    int cacheDuration = 600_000; // 10 minutes
 
-  async handleRedirectAndExchangeToken(): Promise<void> {
-    const url = new URL(window.location.href);
-    const code = url.searchParams.get('code');
-    if (!code) return;
+    // Configure resource retriever with caching
+    DefaultResourceRetriever resourceRetriever =
+            new DefaultResourceRetriever(connectTimeout, readTimeout, cacheDuration);
 
-    console.log('✅ Authorization code received:', code);
+    // Create a RemoteJWKSet with cache
+    JWKSource<SecurityContext> jwkSource =
+            new RemoteJWKSet<>(new URL(jwkSetUri), resourceRetriever);
 
-    // Stop the default token call by NOT calling tryLoginCodeFlow()
-    // Instead, call token endpoint manually:
-    const body = new HttpParams({
-      fromObject: {
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: this.oauthService.redirectUri!,
-        client_id: this.oauthService.clientId!,
-        // 👇 your custom params
-        custom_param_1: 'value1',
-        custom_param_2: 'value2',
-        code_verifier: sessionStorage.getItem('PKCE_verifier') || ''
-      }
-    });
+    // Build NimbusJwtDecoder manually using the JWKSource
+    NimbusJwtDecoder jwtDecoder = new NimbusJwtDecoder(jwkSource);
 
-    const tokenUrl = this.oauthService.tokenEndpoint!;
-    const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+    // Add validators
+    OAuth2TokenValidator<Jwt> withIssuer = JwtValidators.createDefaultWithIssuer(issuer);
+    OAuth2TokenValidator<Jwt> audienceValidator = new AudienceValidator(expectedAudience);
+    OAuth2TokenValidator<Jwt> withAudience = new DelegatingOAuth2TokenValidator<>(withIssuer, audienceValidator);
+    jwtDecoder.setJwtValidator(withAudience);
 
-    try {
-      const response: any = await lastValueFrom(this.http.post(tokenUrl, body, { headers }));
-
-      console.log('%c✅ Custom token exchange successful', 'color:limegreen', response);
-
-      // Let angular-oauth2-oidc manage token lifecycle from now on
-      this.oauthService.processIdToken(response);
-      this.oauthService.processAccessTokenResponse(response, null);
-
-      // Optional: clean up URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } catch (err) {
-      console.error('❌ Custom token request failed', err);
-    }
-  }
+    return jwtDecoder;
 }
