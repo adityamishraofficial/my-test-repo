@@ -1,53 +1,37 @@
-logging.level.com.nimbusds.jose.jwk.source=DEBUG
-logging.level.com.nimbusds.jose.util=DEBUG
+export function transformDate(input: string) {
+  // Expected input: "DD/MM/YYYY"
+  const [day, month, year] = input.split('/');
 
-import com.nimbusds.jose.jwk.source.JWKSource;
-import com.nimbusds.jose.jwk.source.RemoteJWKSet;
-import com.nimbusds.jose.proc.SecurityContext;
-import com.nimbusds.jose.util.DefaultResourceRetriever;
-import com.nimbusds.jwt.proc.DefaultJWTProcessor;
-import org.springframework.security.oauth2.jwt.*;
-import org.springframework.security.oauth2.core.*;
-import org.springframework.security.oauth2.core.validator.*;
-import java.net.URL;
+  if (!day || !month || !year) {
+    throw new Error("Invalid date format. Expected DD/MM/YYYY");
+  }
 
-@Bean
-public JwtDecoder jwtDecoder() throws Exception {
-    String jwkSetUri = "<your JWK Set URI>";
-    String issuer = "<your issuer>";
-    String expectedAudience = "<your audience>";
+  // Create Date object
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
 
-    // Timeouts and cache (in ms)
-    int connectTimeout = 2000;
-    int readTimeout = 2000;
-    int cacheDuration = 600_000; // 10 minutes
+  // Helper to format day suffix in English (st, nd, rd, th)
+  const getDaySuffix = (d: number): string => {
+    if (d > 3 && d < 21) return `${d}th`;
+    switch (d % 10) {
+      case 1: return `${d}st`;
+      case 2: return `${d}nd`;
+      case 3: return `${d}rd`;
+      default: return `${d}th`;
+    }
+  };
 
-    // Configure retriever with cache
-    DefaultResourceRetriever resourceRetriever =
-            new DefaultResourceRetriever(connectTimeout, readTimeout, cacheDuration);
+  // Format: In words EN → "16th June 2025"
+  const english = `${getDaySuffix(Number(day))} ${date.toLocaleString("en-GB", { month: "long" })} ${year}`;
 
-    // Create cached JWK source
-    JWKSource<SecurityContext> jwkSource =
-            new RemoteJWKSet<>(new URL(jwkSetUri), resourceRetriever);
+  // Format: In words FR → "16 juin 2025"
+  const french = date.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
 
-    // Create Nimbus JWT processor using cached JWK source
-    DefaultJWTProcessor<SecurityContext> jwtProcessor = new DefaultJWTProcessor<>();
-    jwtProcessor.setJWSKeySelector(
-            new com.nimbusds.jose.proc.JWSVerificationKeySelector<>(
-                    com.nimbusds.jose.JWSAlgorithm.RS256,
-                    jwkSource
-            )
-    );
+  // Format: American standard → "MM/DD/YYYY"
+  const american = `${month}/${day}/${year}`;
 
-    // Build decoder
-    NimbusJwtDecoder jwtDecoder = new NimbusJwtDecoder(jwtProcessor);
-
-    // Add validators
-    OAuth2TokenValidator<Jwt> withIssuer = JwtValidators.createDefaultWithIssuer(issuer);
-    OAuth2TokenValidator<Jwt> audienceValidator = new AudienceValidator(expectedAudience);
-    OAuth2TokenValidator<Jwt> withAudience =
-            new DelegatingOAuth2TokenValidator<>(withIssuer, audienceValidator);
-    jwtDecoder.setJwtValidator(withAudience);
-
-    return jwtDecoder;
+  return {
+    english,
+    french,
+    american
+  };
 }
