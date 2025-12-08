@@ -1,15 +1,17 @@
-export function transformDate(input: string) {
-  // Expected input: "DD/MM/YYYY"
-  const [day, month, year] = input.split('/');
+export function formatDateCustom(input: string, formatType: 'EN' | 'FR' | 'US'): string {
 
-  if (!day || !month || !year) {
-    throw new Error("Invalid date format. Expected DD/MM/YYYY");
+  // Input must be: "DD-MMM-YYYY" (Ex: 11-Sep-2025)
+  const [day, monthStr, year] = input.split('-');
+
+  if (!day || !monthStr || !year) {
+    throw new Error("Invalid input format. Expected DD-MMM-YYYY.");
   }
 
-  // Create Date object
-  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  // Convert month abbreviation to proper numeric index
+  const monthIndex = new Date(`${monthStr} 1, ${year}`).getMonth();
+  const date = new Date(Number(year), monthIndex, Number(day));
 
-  // Helper to format day suffix in English (st, nd, rd, th)
+  // Helper for English ordinal suffix (st, nd, rd, th)
   const getDaySuffix = (d: number): string => {
     if (d > 3 && d < 21) return `${d}th`;
     switch (d % 10) {
@@ -20,18 +22,23 @@ export function transformDate(input: string) {
     }
   };
 
-  // Format: In words EN → "16th June 2025"
-  const english = `${getDaySuffix(Number(day))} ${date.toLocaleString("en-GB", { month: "long" })} ${year}`;
+  switch (formatType) {
 
-  // Format: In words FR → "16 juin 2025"
-  const french = date.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+    case 'EN':
+      return `${getDaySuffix(Number(day))} ${date
+        .toLocaleString('en-GB', { month: 'long' })} ${year}`;
 
-  // Format: American standard → "MM/DD/YYYY"
-  const american = `${month}/${day}/${year}`;
+    case 'FR':
+      return date.toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
 
-  return {
-    english,
-    french,
-    american
-  };
+    case 'US':
+      return `${String(monthIndex + 1).padStart(2, '0')}/${day}/${year}`;
+
+    default:
+      throw new Error(`Unknown format type: ${formatType}`);
+  }
 }
