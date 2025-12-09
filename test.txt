@@ -1,44 +1,40 @@
-export function formatDateCustom(input: string, formatType: 'EN' | 'FR' | 'US'): string {
-
-  // Input must be: "DD-MMM-YYYY" (Ex: 11-Sep-2025)
-  const [day, monthStr, year] = input.split('-');
-
-  if (!day || !monthStr || !year) {
-    throw new Error("Invalid input format. Expected DD-MMM-YYYY.");
-  }
-
-  // Convert month abbreviation to proper numeric index
-  const monthIndex = new Date(`${monthStr} 1, ${year}`).getMonth();
-  const date = new Date(Number(year), monthIndex, Number(day));
-
-  // Helper for English ordinal suffix (st, nd, rd, th)
-  const getDaySuffix = (d: number): string => {
-    if (d > 3 && d < 21) return `${d}th`;
-    switch (d % 10) {
-      case 1: return `${d}st`;
-      case 2: return `${d}nd`;
-      case 3: return `${d}rd`;
-      default: return `${d}th`;
-    }
-  };
-
-  switch (formatType) {
-
-    case 'EN':
-      return `${getDaySuffix(Number(day))} ${date
-        .toLocaleString('en-GB', { month: 'long' })} ${year}`;
-
-    case 'FR':
-      return date.toLocaleDateString('fr-FR', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-      });
-
-    case 'US':
-      return `${String(monthIndex + 1).padStart(2, '0')}/${day}/${year}`;
-
-    default:
-      throw new Error(`Unknown format type: ${formatType}`);
+{
+  "USD": {
+    "english": "United States Dollar",
+    "french": "dollar americain",
+    "symbol": "$"
+  },
+  "EUR": {
+    "english": "EURO",
+    "french": "EURO (FR)",
+    "symbol": "€"
+  },
+  "GBP": {
+    "english": "Pound Sterling",
+    "french": "livre sterling",
+    "symbol": "£"
   }
 }
+
+type CurrencyInfo = {
+  english: string;
+  french: string;
+  symbol: string;
+};
+
+function transposeCurrency(data: string[][]): Record<string, CurrencyInfo> {
+  const result: Record<string, CurrencyInfo> = {};
+
+  data.forEach(([code, english, french, symbol]) => {
+    result[code] = {
+      english,
+      french,
+      symbol,
+    };
+  });
+
+  return result;
+}
+
+const formatted = transposeCurrency(rawData);
+console.log(formatted);
