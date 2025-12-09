@@ -1,40 +1,52 @@
-{
-  "USD": {
-    "english": "United States Dollar",
-    "french": "dollar americain",
-    "symbol": "$"
-  },
-  "EUR": {
-    "english": "EURO",
-    "french": "EURO (FR)",
-    "symbol": "€"
-  },
-  "GBP": {
-    "english": "Pound Sterling",
-    "french": "livre sterling",
-    "symbol": "£"
+export function formatDateCustom(
+  input: string,
+  formatType: 'EN' | 'FR' | 'US'
+): string {
+
+  const [dayStr, monthStr, yearStr] = input.split('-');
+
+  if (!dayStr || !monthStr || !yearStr) {
+    throw new Error("Invalid input format. Expected DD-MMM-YYYY.");
+  }
+
+  const year = Number(yearStr);
+  const day = Number(dayStr);
+  const monthIndex = new Date(`${monthStr} 1, ${year}`).getMonth();
+  const date = new Date(year, monthIndex, day);
+
+  const numbersToWordsEN = (num: number): string => {
+    const words = require("number-to-words");
+    return words.toWords(num);
+  };
+
+  const numbersToWordsFR = (num: number): string => {
+    const fr = new Intl.NumberFormat('fr-FR', { style: 'decimal' });
+    return fr.format(num).replace(/\./g, ''); // just formatting cleanup
+  };
+
+  switch (formatType) {
+    
+    case 'EN': {
+      const dayWord = numbersToWordsEN(day).replace(/^\w/, c => c.toUpperCase());
+      const monthWord = date.toLocaleString("en-GB", { month: "long" });
+      const yearWord = numbersToWordsEN(year)
+        .replace(/^\w/, c => c.toUpperCase());
+
+      return `${dayWord} ${monthWord} ${yearWord}`;
+    }
+
+    case 'FR': {
+      const dayWordFR = numbersToWordsEN(day).toLowerCase(); // reusable conversion
+      const monthWordFR = date
+        .toLocaleDateString("fr-FR", { month: "long" });
+
+      return `${dayWordFR} ${monthWordFR} ${numbersToWordsEN(year).toLowerCase()}`;
+    }
+
+    case 'US':
+      return `${String(monthIndex + 1).padStart(2, '0')}/${dayStr}/${yearStr}`;
+
+    default:
+      throw new Error(`Invalid format type '${formatType}'`);
   }
 }
-
-type CurrencyInfo = {
-  english: string;
-  french: string;
-  symbol: string;
-};
-
-function transposeCurrency(data: string[][]): Record<string, CurrencyInfo> {
-  const result: Record<string, CurrencyInfo> = {};
-
-  data.forEach(([code, english, french, symbol]) => {
-    result[code] = {
-      english,
-      french,
-      symbol,
-    };
-  });
-
-  return result;
-}
-
-const formatted = transposeCurrency(rawData);
-console.log(formatted);
