@@ -1,52 +1,167 @@
-export function formatDateCustom(
-  input: string,
-  formatType: 'EN' | 'FR' | 'US'
-): string {
+export class AmountFormatter {
 
-  const [dayStr, monthStr, yearStr] = input.split('-');
-
-  if (!dayStr || !monthStr || !yearStr) {
-    throw new Error("Invalid input format. Expected DD-MMM-YYYY.");
+  // -------------------------------------------
+  // MAIN METHOD
+  // -------------------------------------------
+  static formatAmount(value: number) {
+    return {
+      englishWords: this.toEnglishWords(value),
+      frenchWords: this.toFrenchWords(value),
+      englishNumber: this.toEnglishNumberFormat(value),
+      frenchNumber: this.toFrenchNumberFormat(value),
+    };
   }
 
-  const year = Number(yearStr);
-  const day = Number(dayStr);
-  const monthIndex = new Date(`${monthStr} 1, ${year}`).getMonth();
-  const date = new Date(year, monthIndex, day);
+  // -------------------------------------------
+  // ENGLISH NUMBER FORMAT (1,234.56)
+  // -------------------------------------------
+  static toEnglishNumberFormat(value: number): string {
+    return new Intl.NumberFormat("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
+  }
 
-  const numbersToWordsEN = (num: number): string => {
-    const words = require("number-to-words");
-    return words.toWords(num);
-  };
+  // -------------------------------------------
+  // FRENCH NUMBER FORMAT (1 234,56)
+  // -------------------------------------------
+  static toFrenchNumberFormat(value: number): string {
+    return new Intl.NumberFormat("fr-FR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
+  }
 
-  const numbersToWordsFR = (num: number): string => {
-    const fr = new Intl.NumberFormat('fr-FR', { style: 'decimal' });
-    return fr.format(num).replace(/\./g, ''); // just formatting cleanup
-  };
+  // -------------------------------------------
+  // ENGLISH WORDS
+  // -------------------------------------------
+  static toEnglishWords(value: number): string {
+    const formatter = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+    const isNegative = value < 0;
+    value = Math.abs(value);
 
-  switch (formatType) {
-    
-    case 'EN': {
-      const dayWord = numbersToWordsEN(day).replace(/^\w/, c => c.toUpperCase());
-      const monthWord = date.toLocaleString("en-GB", { month: "long" });
-      const yearWord = numbersToWordsEN(year)
-        .replace(/^\w/, c => c.toUpperCase());
+    const [intPart, decPart] = value.toFixed(2).split(".");
+    const intWords = this.numberToEnglish(parseInt(intPart));
+    const decWords = this.numberToEnglish(parseInt(decPart));
 
-      return `${dayWord} ${monthWord} ${yearWord}`;
+    let final = intWords;
+    if (parseInt(decPart) > 0) final += ` point ${decWords.replace(/ /g, " ")}`;
+    if (isNegative) final = "minus " + final;
+
+    return final;
+  }
+
+  private static numberToEnglish(num: number): string {
+    if (num === 0) return "zero";
+
+    const a = [
+      "", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+      "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen",
+      "sixteen", "seventeen", "eighteen", "nineteen"
+    ];
+
+    const b = [
+      "", "", "twenty", "thirty", "forty", "fifty",
+      "sixty", "seventy", "eighty", "ninety"
+    ];
+
+    const g = [
+      "", "thousand", "million", "billion", "trillion"
+    ];
+
+    let word = "";
+    let i = 0;
+
+    while (num > 0) {
+      const chunk = num % 1000;
+
+      if (chunk != 0) {
+        let chunkWords = "";
+
+        const hundreds = Math.floor(chunk / 100);
+        const tensUnits = chunk % 100;
+
+        if (hundreds) chunkWords += a[hundreds] + " hundred ";
+
+        if (tensUnits < 20) {
+          chunkWords += a[tensUnits];
+        } else {
+          chunkWords += b[Math.floor(tensUnits / 10)];
+          if (tensUnits % 10) chunkWords += "-" + a[tensUnits % 10];
+        }
+
+        word = chunkWords.trim() + " " + g[i] + " " + word;
+      }
+
+      num = Math.floor(num / 1000);
+      i++;
     }
 
-    case 'FR': {
-      const dayWordFR = numbersToWordsEN(day).toLowerCase(); // reusable conversion
-      const monthWordFR = date
-        .toLocaleDateString("fr-FR", { month: "long" });
+    return word.trim();
+  }
 
-      return `${dayWordFR} ${monthWordFR} ${numbersToWordsEN(year).toLowerCase()}`;
+  // -------------------------------------------
+  // FRENCH WORDS
+  // -------------------------------------------
+  static toFrenchWords(value: number): string {
+    const isNegative = value < 0;
+    value = Math.abs(value);
+
+    const [intPart, decPart] = value.toFixed(2).split(".");
+    const intWords = this.numberToFrench(parseInt(intPart));
+    const decWords = this.numberToFrench(parseInt(decPart));
+
+    let final = intWords;
+    if (parseInt(decPart) > 0) final += ` virgule ${decWords.replace(/ /g, " ")}`;
+    if (isNegative) final = "moins " + final;
+
+    return final;
+  }
+
+  private static numberToFrench(num: number): string {
+    const a = [
+      "", "un", "deux", "trois", "quatre", "cinq", "six",
+      "sept", "huit", "neuf", "dix", "onze", "douze",
+      "treize", "quatorze", "quinze", "seize"
+    ];
+
+    const tens = [
+      "", "", "vingt", "trente", "quarante",
+      "cinquante", "soixante", "soixante", "quatre-vingt", "quatre-vingt"
+    ];
+
+    if (num === 0) return "zéro";
+    if (num < 17) return a[num];
+    if (num < 20) return "dix-" + a[num - 10];
+
+    let words = "";
+    let hundreds = Math.floor(num / 100);
+    let remainder = num % 100;
+
+    // hundreds
+    if (hundreds > 0) {
+      if (hundreds === 1) words += "cent";
+      else words += a[hundreds] + " cent";
+
+      if (remainder > 0) words += " ";
     }
 
-    case 'US':
-      return `${String(monthIndex + 1).padStart(2, '0')}/${dayStr}/${yearStr}`;
+    // special cases
+    if (remainder < 17) {
+      words += a[remainder];
+    } else {
+      let t = Math.floor(remainder / 10);
+      let u = remainder % 10;
 
-    default:
-      throw new Error(`Invalid format type '${formatType}'`);
+      if (t === 7 || t === 9) {
+        words += tens[t] + "-" + a[10 + u]; // 70 = 60+10, 90 = 80+10
+      } else {
+        words += tens[t];
+        if (u === 1 && (t === 1 || t === 2)) words += " et un";
+        else if (u > 0) words += "-" + a[u];
+      }
+    }
+
+    return words.trim();
   }
 }
