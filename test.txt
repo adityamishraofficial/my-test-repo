@@ -1,113 +1,157 @@
-<div class="page">...</div>
-
-
 .editor-wrapper {
-  background: #e5e5e5;
-  padding: 20px;
+  background: #d6d6d6;
+  padding: 30px;
 }
 
 .page {
   width: 210mm;
-  min-height: 297mm;
-  padding: 20mm;
-  margin: 10mm auto;
+  height: 297mm;
+  margin: 15px auto;
   background: white;
-  box-shadow: 0 0 5px rgba(0,0,0,0.2);
+  box-shadow: 0 0 8px rgba(0,0,0,0.25);
   box-sizing: border-box;
+  position: relative;
   overflow: hidden;
 }
 
-/* Print support */
+/* HEADER */
+.page .header {
+  height: 20mm;
+  padding: 5mm 20mm;
+  border-bottom: 1px solid #ccc;
+  font-size: 12px;
+}
+
+/* CONTENT */
+.page .content {
+  height: calc(297mm - 40mm);
+  padding: 10mm 20mm;
+  overflow: hidden;
+}
+
+/* FOOTER */
+.page .footer {
+  height: 20mm;
+  padding: 5mm 20mm;
+  border-top: 1px solid #ccc;
+  font-size: 12px;
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  text-align: center;
+}
+
 @media print {
   body {
     background: none;
   }
   .page {
-    margin: 0;
     box-shadow: none;
+    margin: 0;
     page-break-after: always;
   }
 }
 
 
+<div class="editor-wrapper">
+  <editor
+    apiKey="no-api-key"
+    [init]="editorInit"
+    (onInit)="onEditorInit($event)">
+  </editor>
+
+  <div style="text-align:center; margin-top:20px;">
+    <button (click)="exportPDF()">Export PDF</button>
+    <button (click)="exportDOCX()">Export DOCX</button>
+  </div>
+</div>
 
 
-import { Component, ViewChild } from '@angular/core';
-import { EditorComponent } from '@tinymce/tinymce-angular';
+import { Component } from '@angular/core';
+import html2pdf from 'html2pdf.js';
+import * as htmlDocx from 'html-docx-js/dist/html-docx';
 
 @Component({
-  selector: 'app-editor',
-  templateUrl: './editor.component.html',
-  styleUrls: ['./editor.component.css']
+  selector: 'app-home',
+  templateUrl: './home.component.html'
 })
-export class EditorComponent {
+export class HomeComponent {
 
-  @ViewChild(EditorComponent) editor!: EditorComponent;
+  private editor: any;
+  private pageCount = 1;
 
   editorInit = {
     height: '100%',
     menubar: false,
     plugins: 'lists table',
-    toolbar: 'undo redo | bold italic | alignleft aligncenter alignright | bullist numlist',
+    toolbar: 'undo redo | bold italic | bullist numlist',
     content_style: `
-      body { margin: 0; background: #e5e5e5; }
+      body { background:#d6d6d6; margin:0; }
+      .content:focus { outline:none; }
     `,
     setup: (editor: any) => {
       editor.on('input keyup paste', () => {
-        setTimeout(() => this.handleAutoPageBreak(editor), 0);
+        setTimeout(() => this.handlePaging(editor), 0);
       });
     }
   };
 
-  ngAfterViewInit() {
-    setTimeout(() => this.initializeFirstPage(), 500);
+  onEditorInit(e: any) {
+    this.editor = e.editor;
+    this.editor.setContent(this.createPage(1));
   }
 
-  initializeFirstPage() {
-    const editor = this.editor.editor;
-    if (!editor.getContent()) {
-      editor.setContent(`<div class="page"><p></p></div>`);
-    }
+  createPage(pageNo: number) {
+    return `
+      <div class="page">
+        <div class="header">Company Name – Confidential</div>
+        <div class="content" contenteditable="true"><p></p></div>
+        <div class="footer">Page ${pageNo}</div>
+      </div>
+    `;
   }
 
-  handleAutoPageBreak(editor: any) {
-    const body = editor.getBody();
-    const pages = body.querySelectorAll('.page');
+  handlePaging(editor: any) {
+    const pages = editor.getBody().querySelectorAll('.page');
+    this.pageCount = pages.length;
 
-    pages.forEach((page: HTMLElement) => {
-      const maxHeight = page.clientHeight;
-      const content = Array.from(page.children);
+    pages.forEach((page: HTMLElement, index: number) => {
+      const content = page.querySelector('.content') as HTMLElement;
+      const footer = page.querySelector('.footer') as HTMLElement;
 
-      let currentHeight = 0;
+      footer.innerText = `Page ${index + 1}`;
 
-      content.forEach((el: any) => {
-        currentHeight += el.offsetHeight;
+      // ⛔ Stop typing if overflow
+      while (content.scrollHeight > content.clientHeight) {
+        const lastPara = content.lastElementChild as HTMLElement;
+        if (!lastPara) break;
 
-        if (currentHeight > maxHeight - 10) {
-          let newPage = document.createElement('div');
-          newPage.className = 'page';
-
-          let nextSibling = el.nextSibling;
-          newPage.appendChild(el);
-
-          while (nextSibling) {
-            const temp = nextSibling.nextSibling;
-            newPage.appendChild(nextSibling);
-            nextSibling = temp;
-          }
-
-          page.after(newPage);
+        let nextPage = page.nextElementSibling as HTMLElement;
+        if (!nextPage) {
+          page.insertAdjacentHTML('afterend', this.createPage(++this.pageCount));
+          nextPage = page.nextElementSibling as HTMLElement;
         }
-      });
+
+        const nextContent = nextPage.querySelector('.content')!;
+        nextContent.prepend(lastPara);
+      }
     });
+  }
+
+  // 📄 PDF EXPORT
+  exportPDF() {
+    const el = document.querySelector('.editor-wrapper') as HTMLElement;
+    html2pdf().from(el).save('document.pdf');
+  }
+
+  // 📄 DOCX EXPORT
+  exportDOCX() {
+    const html = this.editor.getContent();
+    const blob = htmlDocx.asBlob(html);
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'document.docx';
+    link.click();
   }
 }
 
-
-
-<div class="editor-wrapper">
-  <editor
-    apiKey="no-api-key"
-    [init]="editorInit">
-  </editor>
-</div>
