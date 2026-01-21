@@ -1,167 +1,113 @@
-export class AmountFormatter {
+<div class="page">...</div>
 
-  // -------------------------------------------
-  // MAIN METHOD
-  // -------------------------------------------
-  static formatAmount(value: number) {
-    return {
-      englishWords: this.toEnglishWords(value),
-      frenchWords: this.toFrenchWords(value),
-      englishNumber: this.toEnglishNumberFormat(value),
-      frenchNumber: this.toFrenchNumberFormat(value),
-    };
+
+.editor-wrapper {
+  background: #e5e5e5;
+  padding: 20px;
+}
+
+.page {
+  width: 210mm;
+  min-height: 297mm;
+  padding: 20mm;
+  margin: 10mm auto;
+  background: white;
+  box-shadow: 0 0 5px rgba(0,0,0,0.2);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* Print support */
+@media print {
+  body {
+    background: none;
   }
-
-  // -------------------------------------------
-  // ENGLISH NUMBER FORMAT (1,234.56)
-  // -------------------------------------------
-  static toEnglishNumberFormat(value: number): string {
-    return new Intl.NumberFormat("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(value);
-  }
-
-  // -------------------------------------------
-  // FRENCH NUMBER FORMAT (1 234,56)
-  // -------------------------------------------
-  static toFrenchNumberFormat(value: number): string {
-    return new Intl.NumberFormat("fr-FR", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(value);
-  }
-
-  // -------------------------------------------
-  // ENGLISH WORDS
-  // -------------------------------------------
-  static toEnglishWords(value: number): string {
-    const formatter = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
-    const isNegative = value < 0;
-    value = Math.abs(value);
-
-    const [intPart, decPart] = value.toFixed(2).split(".");
-    const intWords = this.numberToEnglish(parseInt(intPart));
-    const decWords = this.numberToEnglish(parseInt(decPart));
-
-    let final = intWords;
-    if (parseInt(decPart) > 0) final += ` point ${decWords.replace(/ /g, " ")}`;
-    if (isNegative) final = "minus " + final;
-
-    return final;
-  }
-
-  private static numberToEnglish(num: number): string {
-    if (num === 0) return "zero";
-
-    const a = [
-      "", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
-      "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen",
-      "sixteen", "seventeen", "eighteen", "nineteen"
-    ];
-
-    const b = [
-      "", "", "twenty", "thirty", "forty", "fifty",
-      "sixty", "seventy", "eighty", "ninety"
-    ];
-
-    const g = [
-      "", "thousand", "million", "billion", "trillion"
-    ];
-
-    let word = "";
-    let i = 0;
-
-    while (num > 0) {
-      const chunk = num % 1000;
-
-      if (chunk != 0) {
-        let chunkWords = "";
-
-        const hundreds = Math.floor(chunk / 100);
-        const tensUnits = chunk % 100;
-
-        if (hundreds) chunkWords += a[hundreds] + " hundred ";
-
-        if (tensUnits < 20) {
-          chunkWords += a[tensUnits];
-        } else {
-          chunkWords += b[Math.floor(tensUnits / 10)];
-          if (tensUnits % 10) chunkWords += "-" + a[tensUnits % 10];
-        }
-
-        word = chunkWords.trim() + " " + g[i] + " " + word;
-      }
-
-      num = Math.floor(num / 1000);
-      i++;
-    }
-
-    return word.trim();
-  }
-
-  // -------------------------------------------
-  // FRENCH WORDS
-  // -------------------------------------------
-  static toFrenchWords(value: number): string {
-    const isNegative = value < 0;
-    value = Math.abs(value);
-
-    const [intPart, decPart] = value.toFixed(2).split(".");
-    const intWords = this.numberToFrench(parseInt(intPart));
-    const decWords = this.numberToFrench(parseInt(decPart));
-
-    let final = intWords;
-    if (parseInt(decPart) > 0) final += ` virgule ${decWords.replace(/ /g, " ")}`;
-    if (isNegative) final = "moins " + final;
-
-    return final;
-  }
-
-  private static numberToFrench(num: number): string {
-    const a = [
-      "", "un", "deux", "trois", "quatre", "cinq", "six",
-      "sept", "huit", "neuf", "dix", "onze", "douze",
-      "treize", "quatorze", "quinze", "seize"
-    ];
-
-    const tens = [
-      "", "", "vingt", "trente", "quarante",
-      "cinquante", "soixante", "soixante", "quatre-vingt", "quatre-vingt"
-    ];
-
-    if (num === 0) return "zéro";
-    if (num < 17) return a[num];
-    if (num < 20) return "dix-" + a[num - 10];
-
-    let words = "";
-    let hundreds = Math.floor(num / 100);
-    let remainder = num % 100;
-
-    // hundreds
-    if (hundreds > 0) {
-      if (hundreds === 1) words += "cent";
-      else words += a[hundreds] + " cent";
-
-      if (remainder > 0) words += " ";
-    }
-
-    // special cases
-    if (remainder < 17) {
-      words += a[remainder];
-    } else {
-      let t = Math.floor(remainder / 10);
-      let u = remainder % 10;
-
-      if (t === 7 || t === 9) {
-        words += tens[t] + "-" + a[10 + u]; // 70 = 60+10, 90 = 80+10
-      } else {
-        words += tens[t];
-        if (u === 1 && (t === 1 || t === 2)) words += " et un";
-        else if (u > 0) words += "-" + a[u];
-      }
-    }
-
-    return words.trim();
+  .page {
+    margin: 0;
+    box-shadow: none;
+    page-break-after: always;
   }
 }
+
+
+
+
+import { Component, ViewChild } from '@angular/core';
+import { EditorComponent } from '@tinymce/tinymce-angular';
+
+@Component({
+  selector: 'app-editor',
+  templateUrl: './editor.component.html',
+  styleUrls: ['./editor.component.css']
+})
+export class EditorComponent {
+
+  @ViewChild(EditorComponent) editor!: EditorComponent;
+
+  editorInit = {
+    height: '100%',
+    menubar: false,
+    plugins: 'lists table',
+    toolbar: 'undo redo | bold italic | alignleft aligncenter alignright | bullist numlist',
+    content_style: `
+      body { margin: 0; background: #e5e5e5; }
+    `,
+    setup: (editor: any) => {
+      editor.on('input keyup paste', () => {
+        setTimeout(() => this.handleAutoPageBreak(editor), 0);
+      });
+    }
+  };
+
+  ngAfterViewInit() {
+    setTimeout(() => this.initializeFirstPage(), 500);
+  }
+
+  initializeFirstPage() {
+    const editor = this.editor.editor;
+    if (!editor.getContent()) {
+      editor.setContent(`<div class="page"><p></p></div>`);
+    }
+  }
+
+  handleAutoPageBreak(editor: any) {
+    const body = editor.getBody();
+    const pages = body.querySelectorAll('.page');
+
+    pages.forEach((page: HTMLElement) => {
+      const maxHeight = page.clientHeight;
+      const content = Array.from(page.children);
+
+      let currentHeight = 0;
+
+      content.forEach((el: any) => {
+        currentHeight += el.offsetHeight;
+
+        if (currentHeight > maxHeight - 10) {
+          let newPage = document.createElement('div');
+          newPage.className = 'page';
+
+          let nextSibling = el.nextSibling;
+          newPage.appendChild(el);
+
+          while (nextSibling) {
+            const temp = nextSibling.nextSibling;
+            newPage.appendChild(nextSibling);
+            nextSibling = temp;
+          }
+
+          page.after(newPage);
+        }
+      });
+    });
+  }
+}
+
+
+
+<div class="editor-wrapper">
+  <editor
+    apiKey="no-api-key"
+    [init]="editorInit">
+  </editor>
+</div>
