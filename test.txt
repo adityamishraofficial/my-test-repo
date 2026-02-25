@@ -1,157 +1,109 @@
-.editor-wrapper {
-  background: #d6d6d6;
-  padding: 30px;
-}
+package com.yourpackage.config;
 
-.page {
-  width: 210mm;
-  height: 297mm;
-  margin: 15px auto;
-  background: white;
-  box-shadow: 0 0 8px rgba(0,0,0,0.25);
-  box-sizing: border-box;
-  position: relative;
-  overflow: hidden;
-}
+import com.zaxxer.hikari.HikariDataSource;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Component;
+import org.springframework.vault.core.lease.event.*;
 
-/* HEADER */
-.page .header {
-  height: 20mm;
-  padding: 5mm 20mm;
-  border-bottom: 1px solid #ccc;
-  font-size: 12px;
-}
+import javax.sql.DataSource;
+import java.util.Map;
 
-/* CONTENT */
-.page .content {
-  height: calc(297mm - 40mm);
-  padding: 10mm 20mm;
-  overflow: hidden;
-}
+@Slf4j
+@Component
+public class VaultDbCredentialListener {
 
-/* FOOTER */
-.page .footer {
-  height: 20mm;
-  padding: 5mm 20mm;
-  border-top: 1px solid #ccc;
-  font-size: 12px;
-  position: absolute;
-  bottom: 0;
-  width: 100%;
-  text-align: center;
-}
+    private final HikariDataSource hikari;
+    private final String vaultRole;
 
-@media print {
-  body {
-    background: none;
-  }
-  .page {
-    box-shadow: none;
-    margin: 0;
-    page-break-after: always;
-  }
-}
+    public VaultDbCredentialListener(
+            DataSource dataSource,
+            @Value("${spring.cloud.vault.database.role}") String vaultRole) {
 
-
-<div class="editor-wrapper">
-  <editor
-    apiKey="no-api-key"
-    [init]="editorInit"
-    (onInit)="onEditorInit($event)">
-  </editor>
-
-  <div style="text-align:center; margin-top:20px;">
-    <button (click)="exportPDF()">Export PDF</button>
-    <button (click)="exportDOCX()">Export DOCX</button>
-  </div>
-</div>
-
-
-import { Component } from '@angular/core';
-import html2pdf from 'html2pdf.js';
-import * as htmlDocx from 'html-docx-js/dist/html-docx';
-
-@Component({
-  selector: 'app-home',
-  templateUrl: './home.component.html'
-})
-export class HomeComponent {
-
-  private editor: any;
-  private pageCount = 1;
-
-  editorInit = {
-    height: '100%',
-    menubar: false,
-    plugins: 'lists table',
-    toolbar: 'undo redo | bold italic | bullist numlist',
-    content_style: `
-      body { background:#d6d6d6; margin:0; }
-      .content:focus { outline:none; }
-    `,
-    setup: (editor: any) => {
-      editor.on('input keyup paste', () => {
-        setTimeout(() => this.handlePaging(editor), 0);
-      });
-    }
-  };
-
-  onEditorInit(e: any) {
-    this.editor = e.editor;
-    this.editor.setContent(this.createPage(1));
-  }
-
-  createPage(pageNo: number) {
-    return `
-      <div class="page">
-        <div class="header">Company Name – Confidential</div>
-        <div class="content" contenteditable="true"><p></p></div>
-        <div class="footer">Page ${pageNo}</div>
-      </div>
-    `;
-  }
-
-  handlePaging(editor: any) {
-    const pages = editor.getBody().querySelectorAll('.page');
-    this.pageCount = pages.length;
-
-    pages.forEach((page: HTMLElement, index: number) => {
-      const content = page.querySelector('.content') as HTMLElement;
-      const footer = page.querySelector('.footer') as HTMLElement;
-
-      footer.innerText = `Page ${index + 1}`;
-
-      // ⛔ Stop typing if overflow
-      while (content.scrollHeight > content.clientHeight) {
-        const lastPara = content.lastElementChild as HTMLElement;
-        if (!lastPara) break;
-
-        let nextPage = page.nextElementSibling as HTMLElement;
-        if (!nextPage) {
-          page.insertAdjacentHTML('afterend', this.createPage(++this.pageCount));
-          nextPage = page.nextElementSibling as HTMLElement;
+        if (!(dataSource instanceof HikariDataSource)) {
+            throw new IllegalStateException(
+                    "VaultDbCredentialListener requires HikariDataSource");
         }
 
-        const nextContent = nextPage.querySelector('.content')!;
-        nextContent.prepend(lastPara);
-      }
-    });
-  }
+        this.hikari = (HikariDataSource) dataSource;
+        this.vaultRole = vaultRole;
 
-  // 📄 PDF EXPORT
-  exportPDF() {
-    const el = document.querySelector('.editor-wrapper') as HTMLElement;
-    html2pdf().from(el).save('document.pdf');
-  }
+        log.info("✅ VaultDbCredentialListener initialized");
+        log.info("➡ Listening for Vault path: database/creds/{}", vaultRole);
+        log.info("➡ Hikari Pool Name: {}", hikari.getPoolName());
+    }
 
-  // 📄 DOCX EXPORT
-  exportDOCX() {
-    const html = this.editor.getContent();
-    const blob = htmlDocx.asBlob(html);
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'document.docx';
-    link.click();
-  }
+    // ===============================
+    // LEASE CREATED
+    // ===============================
+    @EventListener
+    public void handleLeaseCreated(SecretLeaseCreatedEvent event) {
+        log.info("🔥 SecretLeaseCreatedEvent received");
+        processEvent("CREATED", event.getSource().getPath(), event.getSecrets());
+    }
+
+    // ===============================
+    // LEASE ROTATED
+    // ===============================
+    @EventListener
+    public void handleLeaseRotated(SecretLeaseRotatedEvent event) {
+        log.info("🔄 SecretLeaseRotatedEvent received");
+        processEvent("ROTATED", event.getSource().getPath(), event.getSecrets());
+    }
+
+    // ===============================
+    // LEASE EXPIRED
+    // ===============================
+    @EventListener
+    public void handleLeaseExpired(SecretLeaseExpiredEvent event) {
+        log.warn("⏰ SecretLeaseExpiredEvent received for path: {}",
+                event.getSource().getPath());
+    }
+
+    // ===============================
+    // CORE PROCESSOR
+    // ===============================
+    private void processEvent(String type, String path, Map<String, Object> secrets) {
+
+        String expectedPath = "database/creds/" + vaultRole;
+
+        log.info("➡ Event Type: {}", type);
+        log.info("➡ Event Path: {}", path);
+        log.info("➡ Expected Path: {}", expectedPath);
+
+        if (!expectedPath.equals(path)) {
+            log.warn("⚠ Ignoring event. Path does not match Vault role.");
+            return;
+        }
+
+        if (secrets == null || secrets.isEmpty()) {
+            log.error("❌ Vault secrets are empty!");
+            return;
+        }
+
+        log.info("➡ Secret keys received from Vault: {}", secrets.keySet());
+
+        String username = (String) secrets.get("username");
+        String password = (String) secrets.get("password");
+
+        if (username == null || password == null) {
+            log.error("❌ Username or Password missing in Vault response!");
+            return;
+        }
+
+        try {
+            log.info("🔐 Updating Hikari credentials...");
+
+            hikari.getHikariConfigMXBean().setUsername(username);
+            hikari.getHikariConfigMXBean().setPassword(password);
+
+            log.info("♻ Soft evicting existing DB connections...");
+            hikari.getHikariPoolMXBean().softEvictConnections();
+
+            log.info("✅ Hikari pool refreshed successfully!");
+        } catch (Exception ex) {
+            log.error("❌ Error while updating Hikari credentials", ex);
+        }
+    }
 }
-
