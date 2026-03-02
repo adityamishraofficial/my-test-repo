@@ -1,109 +1,23 @@
-package com.yourpackage.config;
+import { definePreset } from '@primeng/themes';
+import Lara from '@primeng/themes/lara';
 
-import com.zaxxer.hikari.HikariDataSource;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.event.EventListener;
-import org.springframework.stereotype.Component;
-import org.springframework.vault.core.lease.event.*;
-
-import javax.sql.DataSource;
-import java.util.Map;
-
-@Slf4j
-@Component
-public class VaultDbCredentialListener {
-
-    private final HikariDataSource hikari;
-    private final String vaultRole;
-
-    public VaultDbCredentialListener(
-            DataSource dataSource,
-            @Value("${spring.cloud.vault.database.role}") String vaultRole) {
-
-        if (!(dataSource instanceof HikariDataSource)) {
-            throw new IllegalStateException(
-                    "VaultDbCredentialListener requires HikariDataSource");
+export default definePreset(Lara, {
+  semantic: {
+    colorScheme: {
+      light: {
+        primary: {
+          color: '#1aa48c',
+          contrastColor: '#ffffff',
+          hoverColor: '#189781'
         }
-
-        this.hikari = (HikariDataSource) dataSource;
-        this.vaultRole = vaultRole;
-
-        log.info("✅ VaultDbCredentialListener initialized");
-        log.info("➡ Listening for Vault path: database/creds/{}", vaultRole);
-        log.info("➡ Hikari Pool Name: {}", hikari.getPoolName());
-    }
-
-    // ===============================
-    // LEASE CREATED
-    // ===============================
-    @EventListener
-    public void handleLeaseCreated(SecretLeaseCreatedEvent event) {
-        log.info("🔥 SecretLeaseCreatedEvent received");
-        processEvent("CREATED", event.getSource().getPath(), event.getSecrets());
-    }
-
-    // ===============================
-    // LEASE ROTATED
-    // ===============================
-    @EventListener
-    public void handleLeaseRotated(SecretLeaseRotatedEvent event) {
-        log.info("🔄 SecretLeaseRotatedEvent received");
-        processEvent("ROTATED", event.getSource().getPath(), event.getSecrets());
-    }
-
-    // ===============================
-    // LEASE EXPIRED
-    // ===============================
-    @EventListener
-    public void handleLeaseExpired(SecretLeaseExpiredEvent event) {
-        log.warn("⏰ SecretLeaseExpiredEvent received for path: {}",
-                event.getSource().getPath());
-    }
-
-    // ===============================
-    // CORE PROCESSOR
-    // ===============================
-    private void processEvent(String type, String path, Map<String, Object> secrets) {
-
-        String expectedPath = "database/creds/" + vaultRole;
-
-        log.info("➡ Event Type: {}", type);
-        log.info("➡ Event Path: {}", path);
-        log.info("➡ Expected Path: {}", expectedPath);
-
-        if (!expectedPath.equals(path)) {
-            log.warn("⚠ Ignoring event. Path does not match Vault role.");
-            return;
+      },
+      dark: {
+        primary: {
+          color: '#1aa48c',
+          contrastColor: '#ffffff',
+          hoverColor: '#189781'
         }
-
-        if (secrets == null || secrets.isEmpty()) {
-            log.error("❌ Vault secrets are empty!");
-            return;
-        }
-
-        log.info("➡ Secret keys received from Vault: {}", secrets.keySet());
-
-        String username = (String) secrets.get("username");
-        String password = (String) secrets.get("password");
-
-        if (username == null || password == null) {
-            log.error("❌ Username or Password missing in Vault response!");
-            return;
-        }
-
-        try {
-            log.info("🔐 Updating Hikari credentials...");
-
-            hikari.getHikariConfigMXBean().setUsername(username);
-            hikari.getHikariConfigMXBean().setPassword(password);
-
-            log.info("♻ Soft evicting existing DB connections...");
-            hikari.getHikariPoolMXBean().softEvictConnections();
-
-            log.info("✅ Hikari pool refreshed successfully!");
-        } catch (Exception ex) {
-            log.error("❌ Error while updating Hikari credentials", ex);
-        }
+      }
     }
-}
+  }
+});
