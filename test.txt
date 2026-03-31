@@ -1,4 +1,72 @@
-npm uninstall @angular-eslint/schematics @angular-eslint/builder @angular-eslint/eslint-plugin @angular-eslint/eslint-plugin-template @angular-eslint/template-parser
+{
+  "name": "ng-wings",
+  "version": "17.0.5-SNAPSHOT",
+  "private": false,
+  "files": ["dist/ng-wings/*.*"],
 
+  "dependencies": {
+    "@angular/animations": "^17.3.12",
+    "@angular/common": "^17.3.12",
+    "@angular/compiler": "^17.3.12",
+    "@angular/core": "^17.3.12",
+    "@angular/forms": "^17.3.12",
+    "@angular/platform-browser": "^17.3.12",
+    "@angular/platform-browser-dynamic": "^17.3.12",
+    "@angular/router": "^17.3.12",
 
-npm install -D @angular-eslint/schematics@17 @angular-eslint/builder@17 @angular-eslint/eslint-plugin@17 @angular-eslint/eslint-plugin-template@17 @angular-eslint/template-parser@17
+    "@fortawesome/angular-fontawesome": "^0.14.0",
+    "@fortawesome/fontawesome-svg-core": "^6.5.1",
+    "@fortawesome/free-solid-svg-icons": "^6.5.1",
+
+    "@ngx-translate/core": "^14.0.0",
+
+    "angular2-multiselect-dropdown": "^8.0.0",
+    "autonumeric": "^4.10.8",
+    "concurrently": "^7.6.0",
+    "copyfiles": "^2.4.1",
+    "fast-json-patch": "^3.1.1",
+    "font-awesome": "^4.7.0",
+    "lodash": "^4.17.21",
+    "node-fetch": "^3.3.2",
+
+    "primeng": "^17.18.0",
+    "primeicons": "^7.0.0",
+
+    "rxjs": "^7.8.1",
+    "tslib": "^2.6.2",
+    "zone.js": "~0.14.4"
+  },
+
+  "devDependencies": {
+    "@angular/cli": "^17.3.12",
+    "@angular/compiler-cli": "^17.3.12",
+    "@angular-devkit/build-angular": "^17.3.12",
+    "@angular/language-service": "^17.3.12",
+
+    "ng-packagr": "^17.3.0",
+
+    "@angular-eslint/schematics": "^17.0.0",
+    "@angular-eslint/builder": "^17.0.0",
+    "@angular-eslint/eslint-plugin": "^17.0.0",
+    "@angular-eslint/eslint-plugin-template": "^17.0.0",
+    "@angular-eslint/template-parser": "^17.0.0",
+
+    "@angular-builders/jest": "^17.0.0",
+
+    "@faker-js/faker": "^8.0.2",
+    "@types/jest": "^29.5.12",
+    "@types/lodash": "^4.14.200",
+
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+
+    "connect": "^3.7.0",
+    "eslint": "^8.56.0",
+
+    "jest": "^29.6.1",
+    "jest-preset-angular": "^14.0.0",
+    "ts-jest": "^29.1.1",
+
+    "typescript": "~5.2.2"
+  }
+}
