@@ -1,150 +1,72 @@
-Your error is **100% clear**:
+it('should return if table is not found', (done) => {
+  const mockNode = document.createElement('div');
 
-✅ You upgraded Angular to **18**
-❌ But `@fortawesome/angular-fontawesome@0.14.1` supports only **Angular 17**
+  spyOn(mockNode, 'closest').and.returnValue(null);
+  component.editor.selection.getNode.and.returnValue(mockNode);
 
-So npm refuses to resolve.
+  component.syncWithTableColumn();
 
----
+  setTimeout(() => {
+    expect(component.editor.selection.getNode).toHaveBeenCalled();
+    done();
+  }, 150);
+});
 
-# 🔥 Root Cause
 
-This package is blocking:
 
-```
-@fortawesome/angular-fontawesome@0.14.1
-peer @angular/core "^17.0.0"
-```
 
-But your project has:
 
-```
-@angular/core 18.2.14
-```
 
-So it fails.
+it('should remove border styles when border is hidden', (done) => {
+  const table = document.createElement('table');
+  const td = document.createElement('td');
+  table.appendChild(td);
 
----
+  const mockNode = document.createElement('div');
+  spyOn(mockNode, 'closest').and.returnValue(table);
 
-# ✅ Fix Option 1 (Recommended): Upgrade FontAwesome Angular Package
+  component.editor.selection.getNode.and.returnValue(mockNode);
 
-Run:
+  spyOn(window, 'getComputedStyle').and.returnValue({
+    borderTopWidth: '0px',
+    borderTopColor: '#000',
+    borderTopStyle: 'hidden'
+  } as any);
 
-```sh
-npm uninstall @fortawesome/angular-fontawesome
-npm install @fortawesome/angular-fontawesome@latest
-```
+  component.syncWithTableColumn();
 
-Then run:
+  setTimeout(() => {
+    expect(td.style.border).toBe('');
+    expect(table.hasAttribute('border')).toBeFalse();
+    done();
+  }, 150);
+});
 
-```sh
-npm install
-```
 
-This should install a newer version that supports Angular 18.
 
----
 
-# ✅ Fix Option 2: Install Compatible Version Manually
 
-If latest doesn’t work, try:
+it('should apply border styles when border is visible', (done) => {
+  const table = document.createElement('table');
+  const td = document.createElement('td');
+  table.appendChild(td);
 
-```sh
-npm install @fortawesome/angular-fontawesome@1.0.0
-```
+  const mockNode = document.createElement('div');
+  spyOn(mockNode, 'closest').and.returnValue(table);
 
-(or check the newest available version)
+  component.editor.selection.getNode.and.returnValue(mockNode);
 
----
+  spyOn(window, 'getComputedStyle').and.returnValue({
+    borderTopWidth: '2px',
+    borderTopColor: 'red',
+    borderTopStyle: 'solid'
+  } as any);
 
-# ✅ Fix Option 3 (Temporary): Use legacy-peer-deps
+  component.syncWithTableColumn();
 
-⚠️ Not recommended, but works if you just want build running:
-
-```sh
-npm install --legacy-peer-deps
-```
-
-Or for TypeScript install:
-
-```sh
-npm install -D typescript@5.5.4 --legacy-peer-deps
-```
-
-But your dependency tree may break later.
-
----
-
-# ✅ Fix Option 4: Remove It Completely (if not needed)
-
-```sh
-npm remove @fortawesome/angular-fontawesome
-```
-
-Then reinstall:
-
-```sh
-rm -rf node_modules package-lock.json
-npm install
-```
-
----
-
-# ✅ Best Clean Fix Steps (Do This)
-
-### Step 1: Remove old package
-
-```sh
-npm uninstall @fortawesome/angular-fontawesome
-```
-
-### Step 2: Install updated one
-
-```sh
-npm install @fortawesome/angular-fontawesome@latest
-```
-
-### Step 3: Clean install
-
-```sh
-rm -rf node_modules package-lock.json
-npm install
-```
-
-### Step 4: Verify
-
-```sh
-ng serve
-```
-
----
-
-# ⚠️ Additional Issue You Should Fix (PrimeNG)
-
-You still have:
-
-```json
-"primeng": "^17.18.0"
-```
-
-If you're on Angular 18, upgrade PrimeNG:
-
-```sh
-npm install primeng@^18 primeicons@^7
-```
-
----
-
-# ✅ Summary
-
-### Main fix:
-
-👉 Upgrade `@fortawesome/angular-fontawesome` to Angular 18 compatible version.
-
-### Then:
-
-👉 Upgrade PrimeNG to v18.
-
----
-
-If you want, I can provide the **final correct package.json dependencies block** for Angular 18 (fully compatible).
+  setTimeout(() => {
+    expect(td.style.border).toContain('2px solid red');
+    expect(td.getAttribute('data-mce-style')).toContain('2px solid red');
+    done();
+  }, 150);
+});
