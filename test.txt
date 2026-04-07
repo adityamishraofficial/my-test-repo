@@ -1,72 +1,7 @@
-it('should return if table is not found', (done) => {
-  const mockNode = document.createElement('div');
-
-  spyOn(mockNode, 'closest').and.returnValue(null);
-  component.editor.selection.getNode.and.returnValue(mockNode);
-
-  component.syncWithTableColumn();
-
-  setTimeout(() => {
-    expect(component.editor.selection.getNode).toHaveBeenCalled();
-    done();
-  }, 150);
-});
-
-
-
-
-
-
-it('should remove border styles when border is hidden', (done) => {
-  const table = document.createElement('table');
-  const td = document.createElement('td');
-  table.appendChild(td);
-
-  const mockNode = document.createElement('div');
-  spyOn(mockNode, 'closest').and.returnValue(table);
-
-  component.editor.selection.getNode.and.returnValue(mockNode);
-
-  spyOn(window, 'getComputedStyle').and.returnValue({
-    borderTopWidth: '0px',
-    borderTopColor: '#000',
-    borderTopStyle: 'hidden'
-  } as any);
-
-  component.syncWithTableColumn();
-
-  setTimeout(() => {
-    expect(td.style.border).toBe('');
-    expect(table.hasAttribute('border')).toBeFalse();
-    done();
-  }, 150);
-});
-
-
-
-
-
-it('should apply border styles when border is visible', (done) => {
-  const table = document.createElement('table');
-  const td = document.createElement('td');
-  table.appendChild(td);
-
-  const mockNode = document.createElement('div');
-  spyOn(mockNode, 'closest').and.returnValue(table);
-
-  component.editor.selection.getNode.and.returnValue(mockNode);
-
-  spyOn(window, 'getComputedStyle').and.returnValue({
-    borderTopWidth: '2px',
-    borderTopColor: 'red',
-    borderTopStyle: 'solid'
-  } as any);
-
-  component.syncWithTableColumn();
-
-  setTimeout(() => {
-    expect(td.style.border).toContain('2px solid red');
-    expect(td.getAttribute('data-mce-style')).toContain('2px solid red');
-    done();
-  }, 150);
-});
+npm install -D \
+@angular-eslint/schematics@18 \
+@angular-eslint/builder@18 \
+@angular-eslint/eslint-plugin@18 \
+@angular-eslint/eslint-plugin-template@18 \
+@angular-eslint/template-parser@18 \
+@angular-builders/jest@18
