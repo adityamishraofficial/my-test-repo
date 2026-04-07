@@ -1,1 +1,94 @@
-npm install -D @angular-devkit/build-angular@18 @angular/cli@18 @angular/compiler-cli@18
+Now the issue is:
+
+You are trying to install Angular 18 packages, but your project still has:
+
+✅ @angular/compiler@17.3.12
+
+And Angular 18 compiler-cli requires:
+
+❌ @angular/compiler@18.x
+
+So npm is failing because Angular packages must always be same major version.
+
+⸻
+
+✅ Correct Step-by-Step Fix (100% working)
+
+✅ Step 1: Update Angular packages together (not separately)
+
+Run this single command:
+
+npm install @angular/core@18 @angular/common@18 @angular/compiler@18 @angular/forms@18 @angular/platform-browser@18 @angular/platform-browser-dynamic@18 @angular/router@18 @angular/animations@18
+
+
+⸻
+
+✅ Step 2: Now update devDependencies
+
+npm install -D @angular/cli@18 @angular/compiler-cli@18 @angular-devkit/build-angular@18 ng-packagr@18
+
+
+⸻
+
+✅ Step 3: Clean install (must)
+
+rm -rf node_modules package-lock.json
+npm install
+
+
+⸻
+
+✅ Step 4: Run Angular migration
+
+Now run:
+
+ng update @angular/core@18 @angular/cli@18
+
+
+⸻
+
+✅ Step 5: Install eslint + jest packages
+
+npm install -D \
+@angular-eslint/schematics@18 \
+@angular-eslint/builder@18 \
+@angular-eslint/eslint-plugin@18 \
+@angular-eslint/eslint-plugin-template@18 \
+@angular-eslint/template-parser@18 \
+@angular-builders/jest@18
+
+
+⸻
+
+✅ Step 6: Build
+
+ng build ng-wings
+
+
+⸻
+
+🔥 Important Rule
+
+⚠️ Never upgrade Angular packages one by one.
+
+All these must be same major version:
+	•	@angular/core
+	•	@angular/compiler
+	•	@angular/common
+	•	@angular/forms
+	•	@angular/router
+	•	@angular/compiler-cli
+
+⸻
+
+⭐ If you want fastest fix
+
+Just do:
+
+ng update @angular/core@18 @angular/cli@18 --force
+
+But only use --force if needed.
+
+⸻
+
+If you want, paste your package.json here and I will give you the exact corrected one for Angular 18.
