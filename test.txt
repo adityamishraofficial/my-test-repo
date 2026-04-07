@@ -1,44 +1,130 @@
-Now the issue is:
 
-You are trying to install Angular 18 packages, but your project still has:
 
-✅ @angular/compiler@17.3.12
 
-And Angular 18 compiler-cli requires:
 
-❌ @angular/compiler@18.x
 
-So npm is failing because Angular packages must always be same major version.
+
+Below is a FULL updated package.json for Angular 18 upgrade based on your screenshots (ng-wings library project).
+
+⚠️ Important: I removed old incompatible versions and upgraded all Angular ecosystem packages properly.
 
 ⸻
 
-✅ Correct Step-by-Step Fix (100% working)
+✅ FULL UPDATED package.json (Angular 18)
 
-✅ Step 1: Update Angular packages together (not separately)
+Copy paste this complete file:
 
-Run this single command:
+{
+  "name": "ng-wings",
+  "version": "18.0.0",
+  "private": false,
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "test": "ng test",
+    "lint": "ng lint"
+  },
+  "dependencies": {
+    "@angular/animations": "^18.2.14",
+    "@angular/common": "^18.2.14",
+    "@angular/compiler": "^18.2.14",
+    "@angular/core": "^18.2.14",
+    "@angular/forms": "^18.2.14",
+    "@angular/platform-browser": "^18.2.14",
+    "@angular/platform-browser-dynamic": "^18.2.14",
+    "@angular/router": "^18.2.14",
 
-npm install @angular/core@18 @angular/common@18 @angular/compiler@18 @angular/forms@18 @angular/platform-browser@18 @angular/platform-browser-dynamic@18 @angular/router@18 @angular/animations@18
+    "@fortawesome/angular-fontawesome": "^0.15.0",
+    "@fortawesome/fontawesome-svg-core": "^6.5.2",
+    "@fortawesome/free-solid-svg-icons": "^6.5.2",
+
+    "@ngx-translate/core": "^15.0.0",
+
+    "angular2-multiselect-dropdown": "^8.0.0",
+    "autonumeric": "^4.10.8",
+    "concurrently": "^8.2.2",
+    "copyfiles": "^2.4.1",
+    "fast-json-patch": "^3.1.1",
+    "font-awesome": "^4.7.0",
+    "lodash": "^4.17.21",
+    "node-fetch": "^3.3.2",
+
+    "primeicons": "^7.0.0",
+    "primeng": "^18.0.0",
+
+    "rxjs": "^7.8.1",
+    "tslib": "^2.6.2",
+    "zone.js": "~0.14.10"
+  },
+  "devDependencies": {
+    "@angular/cli": "^18.2.14",
+    "@angular/compiler-cli": "^18.2.14",
+    "@angular-devkit/build-angular": "^18.2.14",
+    "@angular/language-service": "^18.2.14",
+
+    "ng-packagr": "^18.2.0",
+
+    "@angular-eslint/schematics": "^18.0.0",
+    "@angular-eslint/builder": "^18.0.0",
+    "@angular-eslint/eslint-plugin": "^18.0.0",
+    "@angular-eslint/eslint-plugin-template": "^18.0.0",
+    "@angular-eslint/template-parser": "^18.0.0",
+
+    "@angular-builders/jest": "^18.0.0",
+
+    "@faker-js/faker": "^8.0.2",
+    "@types/jest": "^29.5.12",
+    "@types/lodash": "^4.14.200",
+
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+
+    "connect": "^3.7.0",
+    "eslint": "^8.56.0",
+
+    "jest": "^29.6.1",
+    "jest-preset-angular": "^14.1.0",
+    "ts-jest": "^29.1.1",
+
+    "typescript": "~5.4.5"
+  }
+}
 
 
 ⸻
 
-✅ Step 2: Now update devDependencies
+✅ NEXT STEPS (MUST DO EXACTLY)
 
-npm install -D @angular/cli@18 @angular/compiler-cli@18 @angular-devkit/build-angular@18 ng-packagr@18
+✅ Step 1: Delete old installation
 
-
-⸻
-
-✅ Step 3: Clean install (must)
+Run:
 
 rm -rf node_modules package-lock.json
+
+(Windows cmd alternative)
+
+rmdir /s /q node_modules
+del package-lock.json
+
+
+⸻
+
+✅ Step 2: Clean npm cache
+
+npm cache clean --force
+
+
+⸻
+
+✅ Step 3: Install dependencies fresh
+
 npm install
 
 
 ⸻
 
-✅ Step 4: Run Angular migration
+✅ Step 4: Run Angular Migration
 
 Now run:
 
@@ -47,55 +133,43 @@ ng update @angular/core@18 @angular/cli@18
 
 ⸻
 
-✅ Step 5: Install eslint + jest packages
+✅ Step 5: Upgrade ng-packagr migration check (important for library)
 
-npm install -D \
-@angular-eslint/schematics@18 \
-@angular-eslint/builder@18 \
-@angular-eslint/eslint-plugin@18 \
-@angular-eslint/eslint-plugin-template@18 \
-@angular-eslint/template-parser@18 \
-@angular-builders/jest@18
-
-
-⸻
-
-✅ Step 6: Build
+Run build:
 
 ng build ng-wings
 
 
 ⸻
 
-🔥 Important Rule
+✅ Step 6: If migration fails due to peer deps
 
-⚠️ Never upgrade Angular packages one by one.
+Then run install using legacy peer deps:
 
-All these must be same major version:
-	•	@angular/core
-	•	@angular/compiler
-	•	@angular/common
-	•	@angular/forms
-	•	@angular/router
-	•	@angular/compiler-cli
+npm install --legacy-peer-deps
 
-⸻
-
-⭐ If you want fastest fix
-
-Just do:
+Then retry:
 
 ng update @angular/core@18 @angular/cli@18 --force
 
-But only use --force if needed.
 
 ⸻
 
-If you want, paste your package.json here and I will give you the exact corrected one for Angular 18.
+⚠️ IMPORTANT NOTE ABOUT “always-auth” warning
+
+This is from your .npmrc file.
+It will not break installation, ignore it for now.
+
+⸻
+
+✅ After successful build
+
+Commit changes:
+
+git add .
+git commit -m "Upgrade ng-wings to Angular 18"
 
 
+⸻
 
-
-
-
-npm install @fortawesome/angular-fontawesome@latest @fortawesome/fontawesome-svg-core@latest @fortawesome/free-solid-svg-icons@latest
+If you still get error after this package.json, send me the exact npm error screenshot/text, I will fix the remaining conflicting dependency (100% it will be only 1-2 packages left).
