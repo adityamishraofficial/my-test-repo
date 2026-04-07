@@ -92,3 +92,10 @@ But only use --force if needed.
 ⸻
 
 If you want, paste your package.json here and I will give you the exact corrected one for Angular 18.
+
+
+
+
+
+
+npm install @fortawesome/angular-fontawesome@latest @fortawesome/fontawesome-svg-core@latest @fortawesome/free-solid-svg-icons@latest
