@@ -1,166 +1,108 @@
-Your package.json is corrupted (many typos like A18.2.14, Qangular/forms, Ongrx/..., wrong quotes, wrong commas, wrong package names).
-Angular migration will not work until you fix these names/versions.
+Now the issue is different: you created a mixed Angular state.
 
-Below is a correct Angular 18 compatible dependencies/devDependencies template based on what you shared.
+Your package.json now asks for some Angular 18 packages, but your installed node_modules still contains Angular 17 packages. ng update is tripping over that mismatch, which is why it reports invalid: @angular-devkit/build-angular@17.3.17 ... instead of continuing. Angular’s update flow expects a consistent dependency tree, and the recommended upgrade path is still ng update @angular/cli@^18 @angular/core@^18.  ￼
 
-⸻
+Also, @angular-eslint major versions are meant to match the Angular CLI major version, so mixing Angular 17 CLI with Angular ESLint 18 packages is not a stable intermediate state.  ￼
 
-✅ Correct dependencies for Angular 18
+What happened
 
-"dependencies": {
-  "@angular/animations": "^18.2.14",
-  "@angular/cdk": "^18.2.14",
-  "@angular/common": "^18.2.14",
-  "@angular/compiler": "^18.2.14",
-  "@angular/core": "^18.2.14",
-  "@angular/forms": "^18.2.14",
-  "@angular/platform-browser": "^18.2.14",
-  "@angular/platform-browser-dynamic": "^18.2.14",
-  "@angular/router": "^18.2.14",
+You manually changed some packages to 18, for example:
+	•	@angular-devkit/build-angular: ^18.0.0
+	•	@angular-eslint/*: ^18.0.0
 
-  "@fortawesome/angular-fontawesome": "^0.14.1",
-  "@fortawesome/fontawesome-free": "^6.5.2",
-  "@fortawesome/fontawesome-svg-core": "^6.5.2",
-  "@fortawesome/free-solid-svg-icons": "^6.5.2",
+But these are still 17 in the same file or in installed modules:
+	•	@angular/cli: ^17.3.17
+	•	@angular/compiler-cli: ^17.3.12
+	•	installed @angular-devkit/build-angular: 17.3.17
 
-  "@ngrx/component-store": "^18.0.0",
-  "@ngrx/effects": "^18.0.0",
-  "@ngrx/router-store": "^18.0.0",
-  "@ngrx/store": "^18.0.0",
-  "@ngrx/store-devtools": "^18.0.0",
+So right now your project is neither fully 17 nor fully 18.
 
-  "@ngx-translate/core": "^15.0.0",
-  "@ngx-translate/http-loader": "^8.0.0",
+Best fix from here
 
-  "angular2-multiselect-dropdown": "^4.6.6",
-  "autonumeric": "^4.10.5",
-  "bootstrap": "^4.6.2",
-  "core-js": "^3.37.1",
-  "cors": "^2.8.5",
-  "fast-json-patch": "^3.1.1",
-  "file-saver": "^2.0.5",
-  "font-awesome": "^4.7.0",
-  "hash.js": "^1.1.7",
-  "jest-marbles": "^3.1.1",
-  "lodash": "^4.17.23",
+Do not continue with --allow-dirty.
 
-  "ng-wings": "file:C:/Users/h72169/workspace-local/d-wings/f-ng-wings-lib/dist",
+First bring the repo back to a clean, internally consistent Angular 17 baseline. Then run the migration properly.
 
-  "primeflex": "^3.3.1",
-  "primeicons": "^7.0.0",
-  "primeng": "^18.0.0",
+Step 1: undo the manual edits
 
-  "rxjs": "~7.8.1",
-  "terser": "^5.31.0",
-  "tslib": "^2.6.2",
-  "wings-i18n": "8.0.1",
-  "zone.js": "^0.14.10"
-}
+Since you already made a backup commit, the safest move is to restore package.json and package-lock.json to the last clean state:
 
+git restore package.json package-lock.json
 
-⸻
+If you changed more files and want to fully return to the last commit:
 
-✅ Correct devDependencies for Angular 18
+git reset --hard HEAD
 
-"devDependencies": {
-  "@angular-builders/jest": "^18.0.0",
-  "@angular-eslint/builder": "^18.0.0",
-  "@angular-eslint/eslint-plugin": "^18.0.0",
-  "@angular-eslint/eslint-plugin-template": "^18.0.0",
-  "@angular-eslint/schematics": "^18.0.0",
-  "@angular-eslint/template-parser": "^18.0.0",
+Only do that if you are okay losing uncommitted edits.
 
-  "@angular/build": "^18.2.21",
-  "@angular/cli": "^18.2.21",
-  "@angular/compiler-cli": "^18.2.14",
-  "@angular/language-service": "^18.2.14",
+Step 2: remove installed dependencies and lockfile
 
-  "@ngrx/schematics": "^18.0.0",
+After restoring the Angular 17 state:
 
-  "@openapitools/openapi-generator-cli": "^2.13.5",
+rm -rf node_modules package-lock.json
+npm install
 
-  "@types/jest": "^29.5.12",
-  "@types/node": "^18.19.45",
+On Git Bash in Windows, that command is fine.
 
-  "@typescript-eslint/eslint-plugin": "^7.18.0",
-  "@typescript-eslint/parser": "^7.18.0",
+Step 3: verify you are back to clean Angular 17
 
-  "concurrently": "^7.6.0",
-  "copyfiles": "^2.4.1",
+Run:
 
-  "eslint": "^8.57.0",
-  "eslint-config-prettier": "^9.1.0",
-  "eslint-plugin-import": "^2.29.1",
+npx ng version
+npm ls @angular/cli @angular/core @angular-devkit/build-angular @angular-eslint/schematics
 
-  "jest": "^29.7.0",
-  "jest-environment-jsdom": "^29.7.0",
-  "jest-preset-angular": "^14.2.2",
+At this point, all Angular core/build packages should consistently show 17.x.
 
-  "patch-package": "^8.0.0",
-  "source-map-explorer": "^2.5.3",
+Step 4: commit this clean baseline
 
-  "ts-node": "^10.9.2",
-  "typescript": "~5.4.2"
-}
+git add .
+git commit -m "restore clean angular 17 baseline before migration"
 
+Step 5: update the peer blockers first
 
-⸻
+Before ng update, update the packages that blocked you earlier:
 
-🔥 Important Fixes You Must Do
+npm install -D @angular-builders/jest@^18.0.0 @angular-eslint/builder@^18.0.0 @angular-eslint/eslint-plugin@^18.0.0 @angular-eslint/eslint-plugin-template@^18.0.0 @angular-eslint/schematics@^18.0.0 @angular-eslint/template-parser@^18.0.0
 
-✅ 1. Upgrade NgRx to v18
+Angular 18 supports TypeScript >=5.4.0 <5.6.0 and RxJS ^6.5.3 || ^7.4.0, so your current typescript ~5.4.2 and rxjs ~7.8.1 are already within the supported range.  ￼
 
-You currently have NgRx 17, but Angular is 18 → upgrade to:
+Step 6: now run the Angular upgrade
 
-npm install @ngrx/store@^18 @ngrx/effects@^18 @ngrx/router-store@^18 @ngrx/component-store@^18 @ngrx/store-devtools@^18
+ng update @angular/cli@^18 @angular/core@^18
 
+No --allow-dirty.
 
-⸻
-
-✅ 2. PrimeNG must be 18
-
-You have PrimeNG 17.18, but Angular 18 works best with PrimeNG 18.
-
-npm install primeng@^18 primeicons@^7 primeflex@^3
-
-
-⸻
-
-✅ 3. Fix wrong package names
-
-These are invalid in your file:
-
-Wrong	Correct
-Qangular/forms	@angular/forms
-Ongrx/router-store	@ngrx/router-store
-Ingr/store-devtools	@ngrx/store-devtools
-typescript-eslint/parser	@typescript-eslint/parser
-@openapitools/openapi-generator-c11	@openapitools/openapi-generator-cli
-zone-js	zone.js
-hash-js	hash.js
-
-
-⸻
-
-✅ Migration Command (Correct Way)
-
-Run these:
-
-ng update @angular/core@18 @angular/cli@18
-
-Then:
+Step 7: if it succeeds, then install and test
 
 npm install
-ng serve
+ng version
+ng build
+npm test
+npm run lint
 
+Important rule for this migration
 
-⸻
+Do not manually bump random Angular packages one by one first.
 
-⚠️ One Risk: angular2-multiselect-dropdown
+For Angular migrations, keep these in sync as a set:
+	•	@angular/cli
+	•	@angular/core
+	•	@angular/compiler-cli
+	•	@angular-devkit/build-angular
+	•	@angular-eslint/*
 
-That library is very old and may break in Angular 18.
-If you face errors, replace it with PrimeNG p-multiSelect.
+That is the key reason this run failed.
 
-⸻
+What I would do in your exact situation
 
-If you want, paste your full real package.json (not OCR text) and I will give you the exact final cleaned JSON file ready to use.
+Run these exact commands now:
+
+git restore package.json package-lock.json
+rm -rf node_modules package-lock.json
+npm install
+git add .
+git commit -m "restore clean angular 17 baseline"
+npm install -D @angular-builders/jest@^18.0.0 @angular-eslint/builder@^18.0.0 @angular-eslint/eslint-plugin@^18.0.0 @angular-eslint/eslint-plugin-template@^18.0.0 @angular-eslint/schematics@^18.0.0 @angular-eslint/template-parser@^18.0.0
+ng update @angular/cli@^18 @angular/core@^18
+
+If the next run fails, send the terminal text after this clean reset, not after manual edits. That will be much easier to fix.
