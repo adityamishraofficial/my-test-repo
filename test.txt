@@ -1,108 +1,135 @@
-Now the issue is different: you created a mixed Angular state.
+The failure is not because of PrimeNG.
 
-Your package.json now asks for some Angular 18 packages, but your installed node_modules still contains Angular 17 packages. ng update is tripping over that mismatch, which is why it reports invalid: @angular-devkit/build-angular@17.3.17 ... instead of continuing. Angular’s update flow expects a consistent dependency tree, and the recommended upgrade path is still ng update @angular/cli@^18 @angular/core@^18.  ￼
+Your ng update is stopping because Angular CLI checks the installed dependency tree, and it cannot find @angular-builders/jest@^18.0.0 in node_modules, even though it is present in package.json. Angular’s update command does this dependency scan before running migrations. The Angular CLI also supports upgrading by targeting the major version directly with ng update @angular/cli@^18 @angular/core@^18.  ￼
 
-Also, @angular-eslint major versions are meant to match the Angular CLI major version, so mixing Angular 17 CLI with Angular ESLint 18 packages is not a stable intermediate state.  ￼
+Also, Angular 18 expects compatible versions of Node, TypeScript, and RxJS. Angular’s official compatibility table for v18 allows Node ^18.19.1 || ^20.11.1 || ^22.0.0, TypeScript >=5.4.0 <5.6.0, and RxJS ^6.5.3 || ^7.4.0. Your screenshots show typescript: ^5.4.2, rxjs: ^7.8.1, and zone.js: ^0.14.10, which are in the right range for Angular 18.  ￼
 
-What happened
+PrimeNG does not need to be changed right now. PrimeTek stated they released PrimeNG 17.18.0 with peer dependency fixes so PrimeNG 17 can work with both Angular 17 and Angular 18.  ￼
 
-You manually changed some packages to 18, for example:
-	•	@angular-devkit/build-angular: ^18.0.0
-	•	@angular-eslint/*: ^18.0.0
+Use this approach.
 
-But these are still 17 in the same file or in installed modules:
-	•	@angular/cli: ^17.3.17
-	•	@angular/compiler-cli: ^17.3.12
-	•	installed @angular-devkit/build-angular: 17.3.17
+1) Keep PrimeNG as-is
 
-So right now your project is neither fully 17 nor fully 18.
+Do not change:
 
-Best fix from here
+"primeng": "^17.18.0"
 
-Do not continue with --allow-dirty.
+2) Fix the real blocker first
 
-First bring the repo back to a clean, internally consistent Angular 17 baseline. Then run the migration properly.
+Because @angular-builders/jest is “missing”, install dependencies cleanly before running ng update.
 
-Step 1: undo the manual edits
+Run this from the project root:
 
-Since you already made a backup commit, the safest move is to restore package.json and package-lock.json to the last clean state:
+rm -rf node_modules package-lock.json
+npm cache verify
+npm install
 
-git restore package.json package-lock.json
+If you are on Windows PowerShell:
 
-If you changed more files and want to fully return to the last commit:
+rmdir /s /q node_modules
+del package-lock.json
+npm cache verify
+npm install
 
-git reset --hard HEAD
+If npm install fails specifically on Jest packages, install them explicitly first:
 
-Only do that if you are okay losing uncommitted edits.
+npm install -D @angular-builders/jest@^18.0.0 jest-preset-angular@^14.2.2 jest@^29.7.0 jest-environment-jsdom@^29.7.0 @types/jest@^29.5.12
 
-Step 2: remove installed dependencies and lockfile
+@angular-builders/jest exists and has Angular-aligned major releases on npm, and jest-preset-angular is the standard preset for Angular + Jest setups.  ￼
 
-After restoring the Angular 17 state:
+3) Then run the Angular update
+
+After npm install succeeds:
+
+npx ng update @angular/core@^18 @angular/cli@^18
+
+Then update Angular Material/CDK if you use them:
+
+npx ng update @angular/cdk@^18
+
+4) Package versions that are fine for Angular 18
+
+From your screenshots, this version set is reasonable and keeps PrimeNG unchanged:
+
+{
+  "dependencies": {
+    "@angular/animations": "^18.2.0",
+    "@angular/cdk": "^18.2.0",
+    "@angular/common": "^18.2.0",
+    "@angular/compiler": "^18.2.0",
+    "@angular/core": "^18.2.0",
+    "@angular/forms": "^18.2.0",
+    "@angular/platform-browser": "^18.2.0",
+    "@angular/platform-browser-dynamic": "^18.2.0",
+    "@angular/router": "^18.2.0",
+
+    "@ngrx/component-store": "^18.0.0",
+    "@ngrx/effects": "^18.0.0",
+    "@ngrx/router-store": "^18.0.0",
+    "@ngrx/store": "^18.0.0",
+    "@ngrx/store-devtools": "^18.0.0",
+
+    "primeng": "^17.18.0",
+    "primeicons": "^7.0.0",
+    "rxjs": "^7.8.1",
+    "tslib": "^2.6.2",
+    "zone.js": "^0.14.10"
+  },
+  "devDependencies": {
+    "@angular-builders/jest": "^18.0.0",
+    "@angular-devkit/build-angular": "^18.2.0",
+    "@angular-eslint/builder": "^18.0.0",
+    "@angular-eslint/eslint-plugin": "^18.0.0",
+    "@angular-eslint/eslint-plugin-template": "^18.0.0",
+    "@angular-eslint/schematics": "^18.0.0",
+    "@angular-eslint/template-parser": "^18.0.0",
+    "@angular/cli": "^18.2.0",
+    "@angular/compiler-cli": "^18.2.0",
+    "@angular/language-service": "^18.2.0",
+    "@ngrx/schematics": "^18.0.0",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^18.19.45",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "jest-preset-angular": "^14.2.2",
+    "typescript": "^5.4.2"
+  }
+}
+
+5) Why this is happening in your case
+
+Most likely one of these is true:
+	•	you edited package.json manually but did not run npm install
+	•	node_modules and package-lock.json are stale
+	•	npm install previously failed, so @angular-builders/jest never got installed
+	•	there is a dependency resolution issue caused by another package, and Angular only reports the first missing required package
+
+6) Best order to migrate safely
+
+Run these in order:
 
 rm -rf node_modules package-lock.json
 npm install
-
-On Git Bash in Windows, that command is fine.
-
-Step 3: verify you are back to clean Angular 17
-
-Run:
-
 npx ng version
-npm ls @angular/cli @angular/core @angular-devkit/build-angular @angular-eslint/schematics
-
-At this point, all Angular core/build packages should consistently show 17.x.
-
-Step 4: commit this clean baseline
-
-git add .
-git commit -m "restore clean angular 17 baseline before migration"
-
-Step 5: update the peer blockers first
-
-Before ng update, update the packages that blocked you earlier:
-
-npm install -D @angular-builders/jest@^18.0.0 @angular-eslint/builder@^18.0.0 @angular-eslint/eslint-plugin@^18.0.0 @angular-eslint/eslint-plugin-template@^18.0.0 @angular-eslint/schematics@^18.0.0 @angular-eslint/template-parser@^18.0.0
-
-Angular 18 supports TypeScript >=5.4.0 <5.6.0 and RxJS ^6.5.3 || ^7.4.0, so your current typescript ~5.4.2 and rxjs ~7.8.1 are already within the supported range.  ￼
-
-Step 6: now run the Angular upgrade
-
-ng update @angular/cli@^18 @angular/core@^18
-
-No --allow-dirty.
-
-Step 7: if it succeeds, then install and test
-
+npx ng update @angular/core@^18 @angular/cli@^18
 npm install
-ng version
-ng build
-npm test
-npm run lint
+npx ng build
+npx ng test
 
-Important rule for this migration
+7) One more thing to check
 
-Do not manually bump random Angular packages one by one first.
+Your package has a local file dependency:
 
-For Angular migrations, keep these in sync as a set:
-	•	@angular/cli
-	•	@angular/core
-	•	@angular/compiler-cli
-	•	@angular-devkit/build-angular
-	•	@angular-eslint/*
+"ng-wings": "file:C:/Users/h72169/workspace-local/d-wings/f-ng-wings-lib/dist"
 
-That is the key reason this run failed.
+If that local library was built with Angular 17, it can also block or break the Angular 18 app build later. It usually will not cause the exact “missing @angular-builders/jest” error, but it is the next thing I would verify after the CLI update succeeds.
 
-What I would do in your exact situation
+So the immediate fix is:
 
-Run these exact commands now:
-
-git restore package.json package-lock.json
 rm -rf node_modules package-lock.json
 npm install
-git add .
-git commit -m "restore clean angular 17 baseline"
-npm install -D @angular-builders/jest@^18.0.0 @angular-eslint/builder@^18.0.0 @angular-eslint/eslint-plugin@^18.0.0 @angular-eslint/eslint-plugin-template@^18.0.0 @angular-eslint/schematics@^18.0.0 @angular-eslint/template-parser@^18.0.0
-ng update @angular/cli@^18 @angular/core@^18
+npx ng update @angular/core@^18 @angular/cli@^18
 
-If the next run fails, send the terminal text after this clean reset, not after manual edits. That will be much easier to fix.
+And keep PrimeNG on 17.18.0.
+
+Paste your full package.json here and I’ll give you the exact cleaned final version with only the necessary Angular 18 changes.
