@@ -1,135 +1,44 @@
-The failure is not because of PrimeNG.
-
-Your ng update is stopping because Angular CLI checks the installed dependency tree, and it cannot find @angular-builders/jest@^18.0.0 in node_modules, even though it is present in package.json. Angular’s update command does this dependency scan before running migrations. The Angular CLI also supports upgrading by targeting the major version directly with ng update @angular/cli@^18 @angular/core@^18.  ￼
-
-Also, Angular 18 expects compatible versions of Node, TypeScript, and RxJS. Angular’s official compatibility table for v18 allows Node ^18.19.1 || ^20.11.1 || ^22.0.0, TypeScript >=5.4.0 <5.6.0, and RxJS ^6.5.3 || ^7.4.0. Your screenshots show typescript: ^5.4.2, rxjs: ^7.8.1, and zone.js: ^0.14.10, which are in the right range for Angular 18.  ￼
-
-PrimeNG does not need to be changed right now. PrimeTek stated they released PrimeNG 17.18.0 with peer dependency fixes so PrimeNG 17 can work with both Angular 17 and Angular 18.  ￼
-
-Use this approach.
-
-1) Keep PrimeNG as-is
-
-Do not change:
-
-"primeng": "^17.18.0"
-
-2) Fix the real blocker first
-
-Because @angular-builders/jest is “missing”, install dependencies cleanly before running ng update.
-
-Run this from the project root:
-
-rm -rf node_modules package-lock.json
-npm cache verify
-npm install
-
-If you are on Windows PowerShell:
-
-rmdir /s /q node_modules
-del package-lock.json
-npm cache verify
-npm install
-
-If npm install fails specifically on Jest packages, install them explicitly first:
-
-npm install -D @angular-builders/jest@^18.0.0 jest-preset-angular@^14.2.2 jest@^29.7.0 jest-environment-jsdom@^29.7.0 @types/jest@^29.5.12
-
-@angular-builders/jest exists and has Angular-aligned major releases on npm, and jest-preset-angular is the standard preset for Angular + Jest setups.  ￼
-
-3) Then run the Angular update
-
-After npm install succeeds:
-
-npx ng update @angular/core@^18 @angular/cli@^18
-
-Then update Angular Material/CDK if you use them:
-
-npx ng update @angular/cdk@^18
-
-4) Package versions that are fine for Angular 18
-
-From your screenshots, this version set is reasonable and keeps PrimeNG unchanged:
-
-{
-  "dependencies": {
-    "@angular/animations": "^18.2.0",
-    "@angular/cdk": "^18.2.0",
-    "@angular/common": "^18.2.0",
-    "@angular/compiler": "^18.2.0",
-    "@angular/core": "^18.2.0",
-    "@angular/forms": "^18.2.0",
-    "@angular/platform-browser": "^18.2.0",
-    "@angular/platform-browser-dynamic": "^18.2.0",
-    "@angular/router": "^18.2.0",
-
-    "@ngrx/component-store": "^18.0.0",
-    "@ngrx/effects": "^18.0.0",
-    "@ngrx/router-store": "^18.0.0",
-    "@ngrx/store": "^18.0.0",
-    "@ngrx/store-devtools": "^18.0.0",
-
-    "primeng": "^17.18.0",
-    "primeicons": "^7.0.0",
-    "rxjs": "^7.8.1",
-    "tslib": "^2.6.2",
-    "zone.js": "^0.14.10"
-  },
-  "devDependencies": {
-    "@angular-builders/jest": "^18.0.0",
-    "@angular-devkit/build-angular": "^18.2.0",
-    "@angular-eslint/builder": "^18.0.0",
-    "@angular-eslint/eslint-plugin": "^18.0.0",
-    "@angular-eslint/eslint-plugin-template": "^18.0.0",
-    "@angular-eslint/schematics": "^18.0.0",
-    "@angular-eslint/template-parser": "^18.0.0",
-    "@angular/cli": "^18.2.0",
-    "@angular/compiler-cli": "^18.2.0",
-    "@angular/language-service": "^18.2.0",
-    "@ngrx/schematics": "^18.0.0",
-    "@types/jest": "^29.5.12",
-    "@types/node": "^18.19.45",
-    "jest": "^29.7.0",
-    "jest-environment-jsdom": "^29.7.0",
-    "jest-preset-angular": "^14.2.2",
-    "typescript": "^5.4.2"
-  }
+ol.multilevel,
+ol.multilevel ol {
+  counter-reset: item;
+  list-style: none;
+  margin: 0 0 0 1.5rem;
+  padding: 0;
 }
 
-5) Why this is happening in your case
+ol.multilevel li {
+  counter-increment: item;
+  position: relative;
+  margin: 0.25rem 0;
+  padding-left: 2.5rem;
+}
 
-Most likely one of these is true:
-	•	you edited package.json manually but did not run npm install
-	•	node_modules and package-lock.json are stale
-	•	npm install previously failed, so @angular-builders/jest never got installed
-	•	there is a dependency resolution issue caused by another package, and Angular only reports the first missing required package
+ol.multilevel li::before {
+  content: counters(item, ".") " ";
+  position: absolute;
+  left: 0;
+  top: 0;
+}
 
-6) Best order to migrate safely
+setup: (editor) => {
+  editor.on('NodeChange', () => {
+    const body = editor.getBody();
+    body.querySelectorAll('ol').forEach((ol) => {
+      ol.classList.add('multilevel');
+    });
+  });
+}
 
-Run these in order:
-
-rm -rf node_modules package-lock.json
-npm install
-npx ng version
-npx ng update @angular/core@^18 @angular/cli@^18
-npm install
-npx ng build
-npx ng test
-
-7) One more thing to check
-
-Your package has a local file dependency:
-
-"ng-wings": "file:C:/Users/h72169/workspace-local/d-wings/f-ng-wings-lib/dist"
-
-If that local library was built with Angular 17, it can also block or break the Angular 18 app build later. It usually will not cause the exact “missing @angular-builders/jest” error, but it is the next thing I would verify after the CLI update succeeds.
-
-So the immediate fix is:
-
-rm -rf node_modules package-lock.json
-npm install
-npx ng update @angular/core@^18 @angular/cli@^18
-
-And keep PrimeNG on 17.18.0.
-
-Paste your full package.json here and I’ll give you the exact cleaned final version with only the necessary Angular 18 changes.
+setup: (editor) => {
+  editor.ui.registry.addButton('customNumList', {
+    text: 'Legal List',
+    onAction: () => {
+      editor.execCommand('InsertOrderedList');
+      const node = editor.selection.getNode();
+      const ol = node.closest('ol');
+      if (ol) {
+        ol.classList.add('multilevel');
+      }
+    }
+  });
+}
