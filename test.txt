@@ -42,3 +42,29 @@ setup: (editor) => {
     }
   });
 }
+
+this.editorInit = {
+  promotion: false,
+  branding: false,
+  menubar: 'file edit view insert format tools table help',
+  plugins: 'lists advlist code',
+  toolbar: 'undo redo | numlist bullist | outdent indent | code',
+  content_css: ['/assets/editor-list.css'],
+  extended_valid_elements: 'ol[class],li',
+  setup: (editor) => {
+    const applyMultiLevelClass = () => {
+      const body = editor.getBody();
+      if (!body) return;
+
+      body.querySelectorAll('ol').forEach((ol) => {
+        ol.classList.add('multilevel');
+      });
+    };
+
+    editor.on('init', applyMultiLevelClass);
+    editor.on('SetContent', applyMultiLevelClass);
+    editor.on('Change', applyMultiLevelClass);
+    editor.on('NodeChange', applyMultiLevelClass);
+    editor.on('ExecCommand', () => setTimeout(applyMultiLevelClass, 0));
+  }
+};
