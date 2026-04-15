@@ -1,70 +1,160 @@
-ol.multilevel,
-ol.multilevel ol {
-  counter-reset: item;
-  list-style: none;
-  margin: 0 0 0 1.5rem;
-  padding: 0;
-}
+Yes — you can do it with inline style on the <ol> tag, without using a class.
 
-ol.multilevel li {
-  counter-increment: item;
-  position: relative;
-  margin: 0.25rem 0;
-  padding-left: 2.5rem;
-}
+Use this structure:
 
-ol.multilevel li::before {
-  content: counters(item, ".") " ";
-  position: absolute;
-  left: 0;
-  top: 0;
-}
+<ol style="list-style: none; margin: 0; padding-left: 2rem; counter-reset: item;">
+  <li style="position: relative; margin: 0.25rem 0; padding-left: 2.5rem; counter-increment: item;">
+    bddf
+    <span style="position: absolute; left: 0; top: 0;">1 </span>
 
-setup: (editor) => {
-  editor.on('NodeChange', () => {
-    const body = editor.getBody();
-    body.querySelectorAll('ol').forEach((ol) => {
-      ol.classList.add('multilevel');
-    });
-  });
-}
+    <ol style="list-style: none; margin: 0; padding-left: 2rem; counter-reset: subitem;">
+      <li style="position: relative; margin: 0.25rem 0; padding-left: 2.5rem;">
+        <span style="position: absolute; left: 0; top: 0;">1.1 </span>
+        hefihe
+      </li>
+    </ol>
+  </li>
 
-setup: (editor) => {
-  editor.ui.registry.addButton('customNumList', {
-    text: 'Legal List',
-    onAction: () => {
-      editor.execCommand('InsertOrderedList');
-      const node = editor.selection.getNode();
-      const ol = node.closest('ol');
-      if (ol) {
-        ol.classList.add('multilevel');
+  <li style="position: relative; margin: 0.25rem 0; padding-left: 2.5rem; counter-increment: item;">
+    <span style="position: absolute; left: 0; top: 0;">2 </span>
+    ihfkjerh
+  </li>
+</ol>
+
+But there is one important limitation:
+
+Inline style alone cannot generate dynamic 1.1, 1.1.1 numbering automatically, because:
+	•	inline style cannot create ::before
+	•	inline style cannot use counters() as visible generated content directly inside HTML
+	•	so for pure inline approach, you must insert the number text manually using <span>
+
+That means for TinyMCE, if you want inline-only, you need to transform the HTML after list creation.
+
+Example desired output:
+
+<ol style="list-style: none; padding-left: 20px;">
+  <li style="position: relative; padding-left: 30px;">
+    <span style="position: absolute; left: 0;">1</span>
+    Item 1
+    <ol style="list-style: none; padding-left: 20px;">
+      <li style="position: relative; padding-left: 30px;">
+        <span style="position: absolute; left: 0;">1.1</span>
+        Item 1.1
+      </li>
+    </ol>
+  </li>
+  <li style="position: relative; padding-left: 30px;">
+    <span style="position: absolute; left: 0;">2</span>
+    Item 2
+  </li>
+</ol>
+
+So there are 2 ways:
+
+Option 1 — recommended
+
+Keep normal nested <ol><li> structure in TinyMCE, and when saving or rendering, run a function that:
+	•	walks through nested lists
+	•	calculates numbers like 1, 1.1, 1.1.1
+	•	injects <span> with inline styles
+
+Option 2 — fully manual
+
+User types source code manually with <span>1.1</span> values, but this is not practical.
+
+Here is a working TypeScript function for TinyMCE/Angular that converts nested lists into inline-numbered HTML:
+
+function applyInlineNestedNumbering(root: HTMLElement) {
+  const processOl = (ol: HTMLOListElement, prefix: number[] = []) => {
+    ol.style.listStyle = 'none';
+    ol.style.paddingLeft = '20px';
+    ol.style.margin = '0';
+
+    const lis = Array.from(ol.children).filter(
+      (el) => el.tagName.toLowerCase() === 'li'
+    ) as HTMLLIElement[];
+
+    lis.forEach((li, index) => {
+      const current = [...prefix, index + 1];
+
+      li.style.position = 'relative';
+      li.style.paddingLeft = '30px';
+      li.style.margin = '4px 0';
+
+      const existingMarker = li.querySelector(':scope > span[data-inline-marker="true"]');
+      if (existingMarker) {
+        existingMarker.remove();
       }
+
+      const marker = document.createElement('span');
+      marker.setAttribute('data-inline-marker', 'true');
+      marker.textContent = current.join('.') + ' ';
+      marker.style.position = 'absolute';
+      marker.style.left = '0';
+      marker.style.top = '0';
+
+      li.insertBefore(marker, li.firstChild);
+
+      const nestedOls = Array.from(li.children).filter(
+        (el) => el.tagName.toLowerCase() === 'ol'
+      ) as HTMLOListElement[];
+
+      nestedOls.forEach((nestedOl) => processOl(nestedOl, current));
+    });
+  };
+
+  const topOls = Array.from(root.querySelectorAll('ol'));
+  topOls.forEach((ol) => {
+    if (!ol.parentElement || ol.parentElement.tagName.toLowerCase() !== 'li') {
+      processOl(ol as HTMLOListElement, []);
     }
   });
 }
 
+Use it in TinyMCE like this:
+
 this.editorInit = {
-  promotion: false,
-  branding: false,
-  menubar: 'file edit view insert format tools table help',
   plugins: 'lists advlist code',
-  toolbar: 'undo redo | numlist bullist | outdent indent | code',
-  content_css: ['/assets/editor-list.css'],
-  extended_valid_elements: 'ol[class],li',
+  toolbar: 'undo redo | numlist bullist outdent indent | code',
   setup: (editor) => {
-    const applyMultiLevelClass = () => {
+    const updateInlineNumbering = () => {
       const body = editor.getBody();
       if (!body) return;
-
-      body.querySelectorAll('ol').forEach((ol) => {
-        ol.classList.add('multilevel');
-      });
+      applyInlineNestedNumbering(body);
     };
 
-    editor.on('init', applyMultiLevelClass);
-    editor.on('SetContent', applyMultiLevelClass);
-    editor.on('Change', applyMultiLevelClass);
-    editor.on('NodeChange', applyMultiLevelClass);
-    editor.on('ExecCommand', () => setTimeout(applyMultiLevelClass, 0));
+    editor.on('init', updateInlineNumbering);
+    editor.on('SetContent', updateInlineNumbering);
+    editor.on('Change', updateInlineNumbering);
+    editor.on('NodeChange', () => setTimeout(updateInlineNumbering, 0));
+    editor.on('ExecCommand', () => setTimeout(updateInlineNumbering, 0));
   }
 };
+
+Important note:
+This approach changes the HTML by adding inline <span> markers like:
+
+<span data-inline-marker="true" style="position:absolute;left:0;top:0;">1.1</span>
+
+So this fits your requirement: style is inline within tag only.
+
+Your final HTML will look like:
+
+<ol style="list-style: none; padding-left: 20px; margin: 0;">
+  <li style="position: relative; padding-left: 30px; margin: 4px 0;">
+    <span data-inline-marker="true" style="position: absolute; left: 0; top: 0;">1 </span>
+    bddf
+    <ol style="list-style: none; padding-left: 20px; margin: 0;">
+      <li style="position: relative; padding-left: 30px; margin: 4px 0;">
+        <span data-inline-marker="true" style="position: absolute; left: 0; top: 0;">1.1 </span>
+        hefihe
+      </li>
+    </ol>
+  </li>
+  <li style="position: relative; padding-left: 30px; margin: 4px 0;">
+    <span data-inline-marker="true" style="position: absolute; left: 0; top: 0;">2 </span>
+    ihfkjerh
+  </li>
+</ol>
+
+If you want, I can give you the full copy-paste Angular TinyMCE code merged into your current editorInit.
