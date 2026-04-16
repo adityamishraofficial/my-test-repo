@@ -1,111 +1,194 @@
-Yes — you can implement this for your preview API by putting the CSS inside the generated HTML content itself.
+You need to fix this in two places:
+	1.	how TinyMCE creates the nested list
+	2.	how you transform editor.getContent() before preview
 
-But one important clarification:
-	•	possible: <style>...</style> inside the HTML string you send to preview API
-	•	not possible: true 1.1 / 1.1.1 auto-numbering using only style="" on each tag, because that needs ::before + content: + CSS counters
+Right now your preview logic is only adding CSS and class names.
+It is not fixing broken nesting structure, so the numbering stays wrong.
 
-So the correct approach is:
+From your preview screenshot, the editor content is behaving like this:
+	•	top level is fine
+	•	nested list is being created visually
+	•	but HTML structure is not reliable enough for hierarchical counters
+	•	so your preview/PDF renderer falls back to normal ordered-list numbering
 
-Use HTML content like this
-
-<style>
-  .hierarchical-list,
-  .hierarchical-list ol {
-    list-style: none;
-    margin: 0;
-    padding-left: 40px;
-    counter-reset: item;
-  }
-
-  .hierarchical-list li {
-    display: block;
-    position: relative;
-    margin: 6px 0;
-  }
-
-  .hierarchical-list li::before {
-    content: counters(item, ".") ". ";
-    counter-increment: item;
-    position: absolute;
-    left: -40px;
-    width: 34px;
-    text-align: right;
-  }
-</style>
-
-<ol class="hierarchical-list">
-  <li>Hdhfg
-    <ol>
-      <li>cbvfdjkdf
-        <ol>
-          <li>Gvhgfdjvh</li>
-          <li>vhfvgjdfjv</li>
-        </ol>
-      </li>
-    </ol>
-  </li>
-  <li>Dfgvjegr</li>
-  <li>Higvreugyui</li>
-  <li>gjvjdftiue</li>
-</ol>
-
-That will render like:
+That is why you still see:
 	•	1.
-	•	1.1.
-	•	1.1.1.
-	•	1.1.2.
+	•	2.
+	•	nested again 1.
+	•	nested again 1.
 
-which matches your screenshot logic.
-
-⸻
-
-Step by step implementation
-
-Step 1: Keep TinyMCE nested ordered lists working
-
-Your editor should allow nested <ol> and <li> tags.
-
-Use config like this:
-
-this.editorInit = {
-  promotion: false,
-  branding: false,
-  menubar: 'file edit view insert format tools table help',
-  toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline | alignleft aligncenter alignright | numlist bullist outdent indent | removeformat',
-  plugins: 'lists advlist link image table code help wordcount',
-  advlist_number_styles: 'default,lower-alpha,lower-roman,upper-alpha,upper-roman',
-  advlist_bullet_styles: 'disc,circle,square',
-  valid_elements: '*[*]',
-  extended_valid_elements: 'style[type],ol[class|style|start|type],ul[class|style],li[class|style],span[class|style]',
-  height: 720
-};
-
-This is only for editor structure preservation.
+instead of:
+	•	2.1
+	•	2.2
+	•	2.2.1
 
 ⸻
 
-Step 2: Do not depend on content_style for preview output
+Where your current logic is incomplete
 
-content_style works inside TinyMCE editor iframe, but that CSS is usually not included in the HTML content returned by:
+In your code, this part is fine:
 
-editor.getContent()
+let content = this.buildPreviewHtml(this.editor.getContent());
 
-So for your external preview API, you must build final HTML manually.
+And this part is also fine:
+
+const orderedLists = root.querySelectorAll('ol');
+orderedLists.forEach((ol) => {
+  ol.classList.add('hierarchical-list');
+});
+
+But this is not enough.
+
+Because adding:
+	•	class
+	•	style block
+
+will not help if the HTML is still structurally wrong or if nested <ol> does not sit under the correct parent <li>.
 
 ⸻
 
-Step 3: Create CSS string that will be injected into HTML
+Exact place to fix
 
-Create a method like this:
+Fix 1: inside buildPreviewHtml()
+
+Before adding classes, you must normalize nested lists.
+
+Your method should do this sequence:
+	1.	parse editor HTML
+	2.	fix invalid nested <ol> placement
+	3.	apply class names
+	4.	optionally remove list-style/type/start attributes
+	5.	wrap final HTML with style block
+
+⸻
+
+Replace your buildPreviewHtml() with this
+
+private buildPreviewHtml(editorHtml: string): string {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(`<div id="root">${editorHtml}</div>`, 'text/html');
+  const root = doc.getElementById('root');
+
+  if (!root) {
+    return editorHtml;
+  }
+
+  // Step 1: fix malformed nested list structure
+  this.normalizeNestedOrderedLists(root);
+
+  // Step 2: apply class and cleanup attributes
+  const orderedLists = root.querySelectorAll('ol');
+  orderedLists.forEach((ol) => {
+    ol.classList.add('hierarchical-list');
+    ol.removeAttribute('type');
+    ol.removeAttribute('start');
+    ol.style.listStyle = 'none';
+  });
+
+  // Step 3: cleanup li inline list styling if any
+  const listItems = root.querySelectorAll('li');
+  listItems.forEach((li) => {
+    (li as HTMLElement).style.listStyle = 'none';
+  });
+
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="UTF-8" />
+        ${this.getHierarchicalListStyle()}
+      </head>
+      <body>
+        ${root.innerHTML}
+      </body>
+    </html>
+  `;
+}
+
+
+⸻
+
+Add this new method
+
+This is the missing piece in your logic:
+
+private normalizeNestedOrderedLists(root: HTMLElement): void {
+  const allOrderedLists = Array.from(root.querySelectorAll('ol'));
+
+  allOrderedLists.forEach((ol) => {
+    let node = ol.firstChild;
+
+    while (node) {
+      const nextNode = node.nextSibling;
+
+      if (
+        node.nodeType === Node.ELEMENT_NODE &&
+        (node as HTMLElement).tagName.toLowerCase() === 'ol'
+      ) {
+        let previousElement = node.previousSibling;
+
+        while (previousElement && previousElement.nodeType !== Node.ELEMENT_NODE) {
+          previousElement = previousElement.previousSibling;
+        }
+
+        if (
+          previousElement &&
+          (previousElement as HTMLElement).tagName.toLowerCase() === 'li'
+        ) {
+          previousElement.appendChild(node);
+        }
+      }
+
+      node = nextNode;
+    }
+  });
+}
+
+
+⸻
+
+Why this matters
+
+If HTML is like this:
+
+<ol>
+  <li>fdsfsdfd</li>
+  <li>fdsfsdds</li>
+  <ol>
+    <li>fds</li>
+  </ol>
+</ol>
+
+this is invalid.
+
+It must become:
+
+<ol>
+  <li>fdsfsdfd</li>
+  <li>
+    fdsfsdds
+    <ol>
+      <li>fds</li>
+    </ol>
+  </li>
+</ol>
+
+That normalization method fixes this kind of issue.
+
+⸻
+
+Fix 2: your CSS should be slightly improved
+
+Use this version instead of the current one:
 
 private getHierarchicalListStyle(): string {
   return `
     <style>
       .hierarchical-list,
       .hierarchical-list ol {
-        list-style: none;
-        margin: 0;
-        padding-left: 40px;
+        list-style: none !important;
+        margin: 0 !important;
+        padding-left: 42px !important;
         counter-reset: item;
       }
 
@@ -119,203 +202,149 @@ private getHierarchicalListStyle(): string {
         content: counters(item, ".") ". ";
         counter-increment: item;
         position: absolute;
-        left: -40px;
-        width: 34px;
+        left: -42px;
+        width: 36px;
         text-align: right;
+        white-space: nowrap;
       }
     </style>
   `;
 }
 
+Why this is better
+	•	!important helps when preview/PDF renderer injects default list styling
+	•	white-space: nowrap keeps numbering together
+	•	aligned offsets improve indentation
 
 ⸻
 
-Step 4: Add class to ordered lists before sending to preview API
+Fix 3: editor-side behavior
 
-When the user clicks preview, take the editor HTML and process it.
+Your current toolbar dropdown shows:
+	•	numeric
+	•	alpha
+	•	roman
 
-private buildPreviewHtml(editorHtml: string): string {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(`<div id="root">${editorHtml}</div>`, 'text/html');
-  const root = doc.getElementById('root');
+That is standard TinyMCE list formatting only.
 
-  if (!root) {
-    return editorHtml;
-  }
+It will not automatically create hierarchical counters.
 
-  const orderedLists = root.querySelectorAll('ol');
+So in editor view you may still see normal list numbering, and that is okay.
 
-  orderedLists.forEach((ol) => {
-    ol.classList.add('hierarchical-list');
-    ol.removeAttribute('type');
-  });
+Your real hierarchical numbering is being generated only in preview HTML through CSS counters.
 
-  return `${this.getHierarchicalListStyle()}${root.innerHTML}`;
+That means:
+	•	editor display may look plain
+	•	preview/PDF display should look hierarchical
+
+So do not expect TinyMCE’s live editor to show 1.1.1 unless you fully replace its rendering logic.
+
+⸻
+
+Fix 4: validate what editor.getContent() returns
+
+Before preview call, add this temporarily:
+
+async onPreview() {
+  let rawContent = this.editor.getContent();
+  console.log('RAW HTML:', rawContent);
+
+  let content = this.buildPreviewHtml(rawContent);
+  console.log('PREVIEW HTML:', content);
+
+  content = await ContentProcessUtil.findClauseByIdforPreview(
+    this.clauseManagementService,
+    this.variables,
+    content
+  );
+
+  content = content.replaceAll("copy", "");
+  content = content.replace(/<button class="delete-header-btn".*?<\/button>/g, '');
+  content = content.replace(/<button class="delete-footer-btn".*?<\/button>/g, '');
+
+  this.templateManagementService
+    .getTemplateCreatePreviewPDF({ templateContent: content, typeOfDoc: 'pdf' })
+    .subscribe((blob) => {
+      const pdfUrl = URL.createObjectURL(blob);
+      this.previewContent = this.domSanitizer.bypassSecurityTrustResourceUrl(pdfUrl);
+      this.visible = true;
+    });
 }
 
+Then inspect whether raw HTML looks like this:
 
-⸻
-
-Step 5: Send processed HTML to preview API
-
-Example:
-
-previewTemplate(): void {
-  const rawHtml = this.editor?.getContent() || '';
-  const previewHtml = this.buildPreviewHtml(rawHtml);
-
-  const payload = {
-    htmlContent: previewHtml
-  };
-
-  this.yourService.generatePreview(payload).subscribe({
-    next: (res) => {
-      console.log('Preview generated', res);
-    },
-    error: (err) => {
-      console.error('Preview failed', err);
-    }
-  });
-}
-
-
-⸻
-
-What your editor content can look like
-
-TinyMCE may produce something like this:
+Correct
 
 <ol>
-  <li>Hdhfg
+  <li>fdsfsdfd</li>
+  <li>fdsfsdds
     <ol>
-      <li>cbvfdjkdf
+      <li>fds</li>
+      <li>fsdfds
         <ol>
-          <li>Gvhgfdjvh</li>
-          <li>vhfvgjdfjv</li>
+          <li>dsf
+            <ol>
+              <li>dfs</li>
+            </ol>
+          </li>
         </ol>
       </li>
     </ol>
   </li>
-  <li>Dfgvjegr</li>
-  <li>Higvreugyui</li>
-  <li>gjvjdftiue</li>
+  <li>fdsfds</li>
 </ol>
 
-Your buildPreviewHtml() function will convert it into preview-safe HTML with embedded CSS.
+Wrong
+
+<ol>
+  <li>fdsfsdfd</li>
+  <li>fdsfsdds</li>
+  <ol>
+    <li>fds</li>
+    ...
+  </ol>
+  <li>fdsfds</li>
+</ol>
+
+If it is the second form, your editor/source mode content itself is malformed.
 
 ⸻
 
-Step 6: If your preview API uses full HTML document, send full document
+Fix 5: TinyMCE valid elements
 
-Some preview engines render better if you send complete HTML instead of fragment.
+Your current config is mostly okay, but use this cleaner version:
 
-Use this version:
+extended_valid_elements: 'style[type],ol[class|style|start|type],ul[class|style],li[class|style],span[class|style]',
+valid_elements: '*[*]',
 
-private buildFullPreviewHtml(editorHtml: string): string {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(`<div id="root">${editorHtml}</div>`, 'text/html');
-  const root = doc.getElementById('root');
-
-  if (!root) {
-    return editorHtml;
-  }
-
-  const orderedLists = root.querySelectorAll('ol');
-
-  orderedLists.forEach((ol) => {
-    ol.classList.add('hierarchical-list');
-    ol.removeAttribute('type');
-  });
-
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8" />
-      ${this.getHierarchicalListStyle()}
-    </head>
-    <body>
-      ${root.innerHTML}
-    </body>
-    </html>
-  `;
-}
-
-If your API accepts full HTML, this is better.
+That part is not the root cause, but keep it as-is.
 
 ⸻
 
-Step 7: If numbering alignment looks off, adjust these values
+Most likely root cause in your screenshots
 
-Inside CSS, these are the important ones:
+From your screenshots, the strongest issue looks like this:
+	•	nested list items are being indented visually
+	•	but the nested <ol> is not always attached to the correct <li>
+	•	then your preview PDF engine renders them as separate ordered lists
 
-padding-left: 40px;
-left: -40px;
-width: 34px;
-
-You can tune them like this:
-
-tighter layout
-
-padding-left: 32px;
-left: -32px;
-width: 28px;
-
-wider layout
-
-padding-left: 48px;
-left: -48px;
-width: 40px;
-
+So your actual fix is not toolbar config.
+It is HTML normalization before preview.
 
 ⸻
 
-Important limitation
+Final code you should use
 
-If your external preview API:
-	•	strips <style> tags
-	•	sanitizes ::before
-	•	ignores CSS counters
-
-then this approach will not work.
-
-In that case, you need manual numbering injection into the HTML text itself, for example:
-
-<p>1. Hdhfg</p>
-<p style="margin-left:40px;">1.1. cbvfdjkdf</p>
-<p style="margin-left:80px;">1.1.1. Gvhgfdjvh</p>
-<p style="margin-left:80px;">1.1.2. vhfvgjdfjv</p>
-<p>2. Dfgvjegr</p>
-
-But that is fallback only. First try the CSS-in-HTML approach.
-
-⸻
-
-Recommended flow for your case
-
-Editor side
-
-User writes nested list in TinyMCE.
-
-Before preview API call
-	1.	get content from editor
-	2.	parse HTML
-	3.	add hierarchical-list class to all <ol>
-	4.	prepend <style> block
-	5.	send final HTML to external preview API
-
-⸻
-
-Copy-paste Angular code
+getHierarchicalListStyle()
 
 private getHierarchicalListStyle(): string {
   return `
     <style>
       .hierarchical-list,
       .hierarchical-list ol {
-        list-style: none;
-        margin: 0;
-        padding-left: 40px;
+        list-style: none !important;
+        margin: 0 !important;
+        padding-left: 42px !important;
         counter-reset: item;
       }
 
@@ -329,13 +358,50 @@ private getHierarchicalListStyle(): string {
         content: counters(item, ".") ". ";
         counter-increment: item;
         position: absolute;
-        left: -40px;
-        width: 34px;
+        left: -42px;
+        width: 36px;
         text-align: right;
+        white-space: nowrap;
       }
     </style>
   `;
 }
+
+normalizeNestedOrderedLists()
+
+private normalizeNestedOrderedLists(root: HTMLElement): void {
+  const allOrderedLists = Array.from(root.querySelectorAll('ol'));
+
+  allOrderedLists.forEach((ol) => {
+    let node = ol.firstChild;
+
+    while (node) {
+      const nextNode = node.nextSibling;
+
+      if (
+        node.nodeType === Node.ELEMENT_NODE &&
+        (node as HTMLElement).tagName.toLowerCase() === 'ol'
+      ) {
+        let previousElement = node.previousSibling;
+
+        while (previousElement && previousElement.nodeType !== Node.ELEMENT_NODE) {
+          previousElement = previousElement.previousSibling;
+        }
+
+        if (
+          previousElement &&
+          (previousElement as HTMLElement).tagName.toLowerCase() === 'li'
+        ) {
+          previousElement.appendChild(node);
+        }
+      }
+
+      node = nextNode;
+    }
+  });
+}
+
+buildPreviewHtml()
 
 private buildPreviewHtml(editorHtml: string): string {
   const parser = new DOMParser();
@@ -346,79 +412,47 @@ private buildPreviewHtml(editorHtml: string): string {
     return editorHtml;
   }
 
-  const orderedLists = root.querySelectorAll('ol');
+  this.normalizeNestedOrderedLists(root);
 
+  const orderedLists = root.querySelectorAll('ol');
   orderedLists.forEach((ol) => {
     ol.classList.add('hierarchical-list');
     ol.removeAttribute('type');
+    ol.removeAttribute('start');
+    (ol as HTMLElement).style.listStyle = 'none';
+  });
+
+  const listItems = root.querySelectorAll('li');
+  listItems.forEach((li) => {
+    (li as HTMLElement).style.listStyle = 'none';
   });
 
   return `
     <!DOCTYPE html>
     <html>
-    <head>
-      <meta charset="UTF-8" />
-      ${this.getHierarchicalListStyle()}
-    </head>
-    <body>
-      ${root.innerHTML}
-    </body>
+      <head>
+        <meta charset="UTF-8" />
+        ${this.getHierarchicalListStyle()}
+      </head>
+      <body>
+        ${root.innerHTML}
+      </body>
     </html>
   `;
 }
 
-previewTemplate(): void {
-  const rawHtml = this.editor?.getContent() || '';
-  const previewHtml = this.buildPreviewHtml(rawHtml);
-
-  const payload = {
-    htmlContent: previewHtml
-  };
-
-  this.templateService.generatePreview(payload).subscribe({
-    next: (res) => {
-      console.log('Preview generated successfully', res);
-    },
-    error: (err) => {
-      console.error('Preview generation failed', err);
-    }
-  });
-}
-
 
 ⸻
 
-TinyMCE output example to test
+One more important warning
 
-Paste this into editor source mode:
+If your backend PDF engine does not support CSS counters or ::before, then even correct HTML + CSS will still fail.
 
-<ol>
-  <li>Hdhfg
-    <ol>
-      <li>cbvfdjkdf
-        <ol>
-          <li>Gvhgfdjvh</li>
-          <li>vhfvgjdfjv</li>
-        </ol>
-      </li>
-    </ol>
-  </li>
-  <li>Dfgvjegr</li>
-  <li>Higvreugyui</li>
-  <li>gjvjdftiue</li>
-</ol>
+Then you must generate the numbers manually in HTML text instead of relying on CSS counters.
 
-Then call preview. It should render like your screenshot.
+But first try the normalization fix above, because your current output still looks structurally broken more than CSS-broken.
 
-⸻
-
-Final truth
-
-For your requirement, the best solution is:
-	•	not external CSS file
-	•	not TinyMCE content_style only
-	•	yes embedded <style> inside HTML content sent to preview API
-
-That still counts as “CSS added in HTML content”.
-
-If you want, I’ll give you the exact final TinyMCE config + preview function + sample API payload structure in one copy-paste block.
+Paste your actual editor.getContent() output here and I’ll tell you in one shot whether the remaining issue is:
+	•	malformed HTML
+	•	TinyMCE behavior
+	•	or PDF engine not supporting CSS counters.
