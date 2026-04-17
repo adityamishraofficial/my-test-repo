@@ -1,220 +1,190 @@
-Use this updated code in your component.
+The layout code is no longer the main problem.
 
-1. Update decorateOrderedList(...)
+Your preview is still breaking because the list item text is still inside a block wrapper from TinyMCE, usually <p> or sometimes <div>, so even with flex the text starts on the next line.
 
-Replace your current method with this:
+That means this is not fixed by row/body/marker alone.
+You need to unwrap the content before appending it.
 
-private decorateOrderedList(
-  list: HTMLOListElement,
-  parentPath: Array<{ index: number; style: OrderedListStyle }>
-): void {
-  // Get the list style type
-  const listStyle = this.getOrderedListStyle(list);
+Do this exact fix
 
-  // Get start attribute, default 1
-  const start = parseInt(list.getAttribute('start') || '1', 10);
+Replace your normalizeContentNodes() with this
 
-  // ✅ keep start/type on the ol itself
-  list.setAttribute('start', String(start));
+private normalizeContentNodes(nodes: ChildNode[]): ChildNode[] {
+  const normalized: ChildNode[] = [];
 
-  const typeMap: Record<OrderedListStyle, string> = {
-    decimal: '1',
-    'decimal-leading-zero': '1',
-    'lower-alpha': 'a',
-    'upper-alpha': 'A',
-    'lower-roman': 'i',
-    'upper-roman': 'I'
-  };
-
-  const olType = typeMap[listStyle];
-  if (olType) {
-    list.setAttribute('type', olType);
-  }
-
-  // Optional: also keep inline list-style-type for saved HTML
-  list.style.listStyleType = listStyle;
-
-  // Remove default list styling because custom marker is rendered manually
-  list.style.listStyle = 'none';
-  list.style.paddingLeft = '0';
-  list.style.margin = parentPath.length === 0 ? '0 0 1rem' : '0.35rem 0 0';
-
-  // Get all list items
-  const items = Array.from(list.children).filter(
-    (child): child is HTMLLIElement => child instanceof HTMLLIElement
-  );
-
-  items.forEach((item, index) => {
-    const currentIndex = start + index;
-    const currentPath = [...parentPath, { index: currentIndex, style: listStyle }];
-
-    // ✅ keep start/type on li too if you want to inspect/export later
-    item.setAttribute('data-list-index', String(currentIndex));
-    item.setAttribute('data-list-type', olType);
-
-    item.style.display = 'block';
-    item.style.margin = '0.35rem 0';
-
-    const childNodes = Array.from(item.childNodes);
-
-    const nestedLists = childNodes.filter(
-      (node): node is HTMLElement =>
-        node instanceof HTMLOListElement || node instanceof HTMLUListElement
-    );
-
-    const contentNodes = this.normalizeContentNodes(
-      childNodes.filter(
-        (node) =>
-          !(node instanceof HTMLOListElement) && !(node instanceof HTMLUListElement)
-      )
-    );
-
-    item.replaceChildren();
-    item.style.listStyle = 'none';
-    item.style.margin = '0.35rem 0';
-    item.style.padding = '0';
-
-    const row = document.createElement('div');
-    row.style.display = 'table';
-    row.style.width = '100%';
-    row.style.tableLayout = 'fixed';
-
-    const marker = document.createElement('span');
-    marker.textContent = `${this.formatMarkerPath(currentPath)}.`;
-    marker.style.display = 'table-cell';
-    marker.style.width = `${Math.max(3.4, currentPath.length * 1.15 + 2.1)}rem`;
-    marker.style.paddingRight = '0.6rem';
-    marker.style.verticalAlign = 'top';
-    marker.style.textAlign = 'right';
-    marker.style.fontWeight = '700';
-    marker.style.color = '#1f2a37';
-
-    const body = document.createElement('div');
-    body.style.display = 'table-cell';
-    body.style.verticalAlign = 'top';
-    body.style.width = 'auto';
-    body.style.wordBreak = 'break-word';
-
-    for (const node of contentNodes) {
-      body.appendChild(node);
-    }
-
-    if (!body.innerHTML.trim()) {
-      body.innerHTML = '&nbsp;';
-    }
-
-    row.append(marker, body);
-    item.appendChild(row);
-
-    for (const nestedList of nestedLists) {
-      if (nestedList instanceof HTMLOListElement) {
-        this.decorateOrderedList(nestedList, currentPath);
-      } else if (nestedList instanceof HTMLUListElement) {
-        nestedList.style.margin = '0.35rem 0 0 1.5rem';
+  for (const node of nodes) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+      if (text) {
+        normalized.push(document.createTextNode(text));
       }
-      item.appendChild(nestedList);
+      continue;
     }
-  });
-}
 
+    if (!(node instanceof HTMLElement)) {
+      normalized.push(node);
+      continue;
+    }
 
-⸻
+    const tag = node.tagName.toLowerCase();
 
-2. Update getOrderedListStyle(...)
+    // unwrap block wrappers like <p> or <div> inside list item content
+    if (tag === 'p' || tag === 'div') {
+      const text = node.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+      if (text) {
+        normalized.push(document.createTextNode(text));
+      }
+      continue;
+    }
 
-Replace your current method with this:
-
-private getOrderedListStyle(list: HTMLOListElement): OrderedListStyle {
-  const inlineStyle = list.style.listStyleType?.trim().toLowerCase();
-
-  if (this.isSupportedOrderedListStyle(inlineStyle)) {
-    return inlineStyle;
+    // inline elements can stay
+    node.style.margin = '0';
+    normalized.push(node);
   }
 
-  const type = list.getAttribute('type');
+  return normalized;
+}
 
-  switch (type) {
-    case 'a':
-      return 'lower-alpha';
-    case 'A':
-      return 'upper-alpha';
-    case 'i':
-      return 'lower-roman';
-    case 'I':
-      return 'upper-roman';
-    default:
-      return 'decimal';
+
+⸻
+
+Then use this exact block in decorateOrderedList()
+
+const row = document.createElement('div');
+row.style.display = 'flex';
+row.style.alignItems = 'flex-start';
+row.style.width = '100%';
+
+const marker = document.createElement('span');
+marker.textContent = `${this.formatMarkerPath(currentPath)}.`;
+marker.style.display = 'inline-block';
+marker.style.minWidth = `${Math.max(3.4, currentPath.length * 1.15 + 2.1)}rem`;
+marker.style.marginRight = '0.6rem';
+marker.style.textAlign = 'right';
+marker.style.whiteSpace = 'nowrap';
+marker.style.fontWeight = '700';
+marker.style.color = '#1f2a37';
+marker.style.flexShrink = '0';
+
+const body = document.createElement('span');
+body.style.flex = '1';
+body.style.wordBreak = 'break-word';
+(body.style as any).minWidth = '0';
+
+for (const node of contentNodes) {
+  body.appendChild(node);
+}
+
+if (!body.textContent?.trim()) {
+  body.innerHTML = '&nbsp;';
+}
+
+row.append(marker, body);
+item.appendChild(row);
+
+
+⸻
+
+Important change here
+
+Notice I changed:
+
+const body = document.createElement('div');
+
+to:
+
+const body = document.createElement('span');
+
+That matters.
+
+A div is block-level.
+A span keeps the first line content inline with the number more reliably.
+
+Since the parent row is flex, the span can still behave as a flex item.
+
+⸻
+
+Also clean applyElementStyles()
+
+Right now you are styling paragraphs globally:
+
+const paragraphs = root.querySelectorAll('p');
+for (const paragraph of paragraphs) {
+  const element = paragraph as HTMLElement;
+  element.style.margin = '0 0 0.75rem';
+  element.style.color = '#4c5b6b';
+}
+
+This is reintroducing block spacing into list items.
+
+Replace that paragraph block with this:
+
+const paragraphs = root.querySelectorAll('p');
+for (const paragraph of paragraphs) {
+  const element = paragraph as HTMLElement;
+
+  if (element.closest('li')) {
+    element.style.margin = '0';
+    element.style.display = 'inline';
+  } else {
+    element.style.margin = '0 0 0.75rem';
   }
+
+  element.style.color = '#4c5b6b';
 }
 
 
 ⸻
 
-3. If you want start and type to be added before preview rendering
+Why it is still happening
 
-Inside your buildPreviewHtml(content: string): string, keep this:
+Because your list item likely looks like this before normalization:
 
-private buildPreviewHtml(content: string): string {
-  const root = document.createElement('div');
-  root.innerHTML = content;
+<li>
+  <p>fsdfdfds</p>
+</li>
 
-  root.style.fontFamily = 'Georgia, serif';
-  root.style.fontSize = '16px';
-  root.style.lineHeight = '1.6';
-  root.style.color = '#1f2a37';
+So even if you append it into the right-side container, the <p> still behaves like a block and starts on a new line.
 
-  this.applyElementStyles(root);
-  this.decorateOrderedLists(root);
+You want it to become effectively:
 
-  return root.innerHTML;
-}
+<li>
+  1. fsdfdfds
+</li>
 
-This is fine already.
+not:
 
-⸻
-
-4. TinyMCE config update
-
-Your extended_valid_elements should include li also, not only ol.
-
-Change it to:
-
-extended_valid_elements:
-  'style[type],ol[class|style|start|type],ul[class|style],li[class|style|value|data-list-index|data-list-type],button[onclick|class|style|id|type],span[id|class|style],div[class|style|data-*]',
-
-And keep:
-
-valid_elements: '*[*]',
-advlist_number_styles: 'default,lower-alpha,lower-roman,upper-alpha,upper-roman',
+<li>
+  1.
+  <p>fsdfdfds</p>
+</li>
 
 
 ⸻
 
-5. If you want a small helper for OrderedListStyle
+Final 3 fixes you need
+	1.	normalizeContentNodes() must unwrap <p> and <div>
+	2.	body should be a span, not div
+	3.	applyElementStyles() must not apply block paragraph spacing inside li
 
-Make sure your type supports all values:
+⸻
 
-type OrderedListStyle =
-  | 'decimal'
-  | 'decimal-leading-zero'
-  | 'lower-alpha'
-  | 'upper-alpha'
-  | 'lower-roman'
-  | 'upper-roman';
+Quick debug check
+
+Inspect one broken list item in DevTools.
+If you still see:
+
+<span>1.</span>
+<span><p>fsdfdfds</p></span>
+
+then normalization is not applied correctly.
+
+You should end up with:
+
+<span>1.</span>
+<span>fsdfdfds</span>
 
 
 ⸻
 
-What this gives you
-
-Now your generated HTML will preserve:
-
-<ol start="3" type="A" style="list-style-type: upper-alpha;">
-
-And each li will also carry:
-
-<li data-list-index="3" data-list-type="A">
-
-So your preview logic still works, and the original ordered-list metadata is preserved.
-
-If you want, I can now give you one full merged copy-paste version of all related methods together.
+Paste these 3 updated methods together and it should fix the line-break issue.
