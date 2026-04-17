@@ -1,458 +1,220 @@
-You need to fix this in two places:
-	1.	how TinyMCE creates the nested list
-	2.	how you transform editor.getContent() before preview
+Use this updated code in your component.
 
-Right now your preview logic is only adding CSS and class names.
-It is not fixing broken nesting structure, so the numbering stays wrong.
+1. Update decorateOrderedList(...)
 
-From your preview screenshot, the editor content is behaving like this:
-	•	top level is fine
-	•	nested list is being created visually
-	•	but HTML structure is not reliable enough for hierarchical counters
-	•	so your preview/PDF renderer falls back to normal ordered-list numbering
+Replace your current method with this:
 
-That is why you still see:
-	•	1.
-	•	2.
-	•	nested again 1.
-	•	nested again 1.
+private decorateOrderedList(
+  list: HTMLOListElement,
+  parentPath: Array<{ index: number; style: OrderedListStyle }>
+): void {
+  // Get the list style type
+  const listStyle = this.getOrderedListStyle(list);
 
-instead of:
-	•	2.1
-	•	2.2
-	•	2.2.1
+  // Get start attribute, default 1
+  const start = parseInt(list.getAttribute('start') || '1', 10);
 
-⸻
+  // ✅ keep start/type on the ol itself
+  list.setAttribute('start', String(start));
 
-Where your current logic is incomplete
+  const typeMap: Record<OrderedListStyle, string> = {
+    decimal: '1',
+    'decimal-leading-zero': '1',
+    'lower-alpha': 'a',
+    'upper-alpha': 'A',
+    'lower-roman': 'i',
+    'upper-roman': 'I'
+  };
 
-In your code, this part is fine:
-
-let content = this.buildPreviewHtml(this.editor.getContent());
-
-And this part is also fine:
-
-const orderedLists = root.querySelectorAll('ol');
-orderedLists.forEach((ol) => {
-  ol.classList.add('hierarchical-list');
-});
-
-But this is not enough.
-
-Because adding:
-	•	class
-	•	style block
-
-will not help if the HTML is still structurally wrong or if nested <ol> does not sit under the correct parent <li>.
-
-⸻
-
-Exact place to fix
-
-Fix 1: inside buildPreviewHtml()
-
-Before adding classes, you must normalize nested lists.
-
-Your method should do this sequence:
-	1.	parse editor HTML
-	2.	fix invalid nested <ol> placement
-	3.	apply class names
-	4.	optionally remove list-style/type/start attributes
-	5.	wrap final HTML with style block
-
-⸻
-
-Replace your buildPreviewHtml() with this
-
-private buildPreviewHtml(editorHtml: string): string {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(`<div id="root">${editorHtml}</div>`, 'text/html');
-  const root = doc.getElementById('root');
-
-  if (!root) {
-    return editorHtml;
+  const olType = typeMap[listStyle];
+  if (olType) {
+    list.setAttribute('type', olType);
   }
 
-  // Step 1: fix malformed nested list structure
-  this.normalizeNestedOrderedLists(root);
+  // Optional: also keep inline list-style-type for saved HTML
+  list.style.listStyleType = listStyle;
 
-  // Step 2: apply class and cleanup attributes
-  const orderedLists = root.querySelectorAll('ol');
-  orderedLists.forEach((ol) => {
-    ol.classList.add('hierarchical-list');
-    ol.removeAttribute('type');
-    ol.removeAttribute('start');
-    ol.style.listStyle = 'none';
-  });
+  // Remove default list styling because custom marker is rendered manually
+  list.style.listStyle = 'none';
+  list.style.paddingLeft = '0';
+  list.style.margin = parentPath.length === 0 ? '0 0 1rem' : '0.35rem 0 0';
 
-  // Step 3: cleanup li inline list styling if any
-  const listItems = root.querySelectorAll('li');
-  listItems.forEach((li) => {
-    (li as HTMLElement).style.listStyle = 'none';
-  });
-
-  return `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="UTF-8" />
-        ${this.getHierarchicalListStyle()}
-      </head>
-      <body>
-        ${root.innerHTML}
-      </body>
-    </html>
-  `;
-}
-
-
-⸻
-
-Add this new method
-
-This is the missing piece in your logic:
-
-private normalizeNestedOrderedLists(root: HTMLElement): void {
-  const allOrderedLists = Array.from(root.querySelectorAll('ol'));
-
-  allOrderedLists.forEach((ol) => {
-    let node = ol.firstChild;
-
-    while (node) {
-      const nextNode = node.nextSibling;
-
-      if (
-        node.nodeType === Node.ELEMENT_NODE &&
-        (node as HTMLElement).tagName.toLowerCase() === 'ol'
-      ) {
-        let previousElement = node.previousSibling;
-
-        while (previousElement && previousElement.nodeType !== Node.ELEMENT_NODE) {
-          previousElement = previousElement.previousSibling;
-        }
-
-        if (
-          previousElement &&
-          (previousElement as HTMLElement).tagName.toLowerCase() === 'li'
-        ) {
-          previousElement.appendChild(node);
-        }
-      }
-
-      node = nextNode;
-    }
-  });
-}
-
-
-⸻
-
-Why this matters
-
-If HTML is like this:
-
-<ol>
-  <li>fdsfsdfd</li>
-  <li>fdsfsdds</li>
-  <ol>
-    <li>fds</li>
-  </ol>
-</ol>
-
-this is invalid.
-
-It must become:
-
-<ol>
-  <li>fdsfsdfd</li>
-  <li>
-    fdsfsdds
-    <ol>
-      <li>fds</li>
-    </ol>
-  </li>
-</ol>
-
-That normalization method fixes this kind of issue.
-
-⸻
-
-Fix 2: your CSS should be slightly improved
-
-Use this version instead of the current one:
-
-private getHierarchicalListStyle(): string {
-  return `
-    <style>
-      .hierarchical-list,
-      .hierarchical-list ol {
-        list-style: none !important;
-        margin: 0 !important;
-        padding-left: 42px !important;
-        counter-reset: item;
-      }
-
-      .hierarchical-list li {
-        display: block;
-        position: relative;
-        margin: 6px 0;
-      }
-
-      .hierarchical-list li::before {
-        content: counters(item, ".") ". ";
-        counter-increment: item;
-        position: absolute;
-        left: -42px;
-        width: 36px;
-        text-align: right;
-        white-space: nowrap;
-      }
-    </style>
-  `;
-}
-
-Why this is better
-	•	!important helps when preview/PDF renderer injects default list styling
-	•	white-space: nowrap keeps numbering together
-	•	aligned offsets improve indentation
-
-⸻
-
-Fix 3: editor-side behavior
-
-Your current toolbar dropdown shows:
-	•	numeric
-	•	alpha
-	•	roman
-
-That is standard TinyMCE list formatting only.
-
-It will not automatically create hierarchical counters.
-
-So in editor view you may still see normal list numbering, and that is okay.
-
-Your real hierarchical numbering is being generated only in preview HTML through CSS counters.
-
-That means:
-	•	editor display may look plain
-	•	preview/PDF display should look hierarchical
-
-So do not expect TinyMCE’s live editor to show 1.1.1 unless you fully replace its rendering logic.
-
-⸻
-
-Fix 4: validate what editor.getContent() returns
-
-Before preview call, add this temporarily:
-
-async onPreview() {
-  let rawContent = this.editor.getContent();
-  console.log('RAW HTML:', rawContent);
-
-  let content = this.buildPreviewHtml(rawContent);
-  console.log('PREVIEW HTML:', content);
-
-  content = await ContentProcessUtil.findClauseByIdforPreview(
-    this.clauseManagementService,
-    this.variables,
-    content
+  // Get all list items
+  const items = Array.from(list.children).filter(
+    (child): child is HTMLLIElement => child instanceof HTMLLIElement
   );
 
-  content = content.replaceAll("copy", "");
-  content = content.replace(/<button class="delete-header-btn".*?<\/button>/g, '');
-  content = content.replace(/<button class="delete-footer-btn".*?<\/button>/g, '');
+  items.forEach((item, index) => {
+    const currentIndex = start + index;
+    const currentPath = [...parentPath, { index: currentIndex, style: listStyle }];
 
-  this.templateManagementService
-    .getTemplateCreatePreviewPDF({ templateContent: content, typeOfDoc: 'pdf' })
-    .subscribe((blob) => {
-      const pdfUrl = URL.createObjectURL(blob);
-      this.previewContent = this.domSanitizer.bypassSecurityTrustResourceUrl(pdfUrl);
-      this.visible = true;
-    });
-}
+    // ✅ keep start/type on li too if you want to inspect/export later
+    item.setAttribute('data-list-index', String(currentIndex));
+    item.setAttribute('data-list-type', olType);
 
-Then inspect whether raw HTML looks like this:
+    item.style.display = 'block';
+    item.style.margin = '0.35rem 0';
 
-Correct
+    const childNodes = Array.from(item.childNodes);
 
-<ol>
-  <li>fdsfsdfd</li>
-  <li>fdsfsdds
-    <ol>
-      <li>fds</li>
-      <li>fsdfds
-        <ol>
-          <li>dsf
-            <ol>
-              <li>dfs</li>
-            </ol>
-          </li>
-        </ol>
-      </li>
-    </ol>
-  </li>
-  <li>fdsfds</li>
-</ol>
+    const nestedLists = childNodes.filter(
+      (node): node is HTMLElement =>
+        node instanceof HTMLOListElement || node instanceof HTMLUListElement
+    );
 
-Wrong
+    const contentNodes = this.normalizeContentNodes(
+      childNodes.filter(
+        (node) =>
+          !(node instanceof HTMLOListElement) && !(node instanceof HTMLUListElement)
+      )
+    );
 
-<ol>
-  <li>fdsfsdfd</li>
-  <li>fdsfsdds</li>
-  <ol>
-    <li>fds</li>
-    ...
-  </ol>
-  <li>fdsfds</li>
-</ol>
+    item.replaceChildren();
+    item.style.listStyle = 'none';
+    item.style.margin = '0.35rem 0';
+    item.style.padding = '0';
 
-If it is the second form, your editor/source mode content itself is malformed.
+    const row = document.createElement('div');
+    row.style.display = 'table';
+    row.style.width = '100%';
+    row.style.tableLayout = 'fixed';
 
-⸻
+    const marker = document.createElement('span');
+    marker.textContent = `${this.formatMarkerPath(currentPath)}.`;
+    marker.style.display = 'table-cell';
+    marker.style.width = `${Math.max(3.4, currentPath.length * 1.15 + 2.1)}rem`;
+    marker.style.paddingRight = '0.6rem';
+    marker.style.verticalAlign = 'top';
+    marker.style.textAlign = 'right';
+    marker.style.fontWeight = '700';
+    marker.style.color = '#1f2a37';
 
-Fix 5: TinyMCE valid elements
+    const body = document.createElement('div');
+    body.style.display = 'table-cell';
+    body.style.verticalAlign = 'top';
+    body.style.width = 'auto';
+    body.style.wordBreak = 'break-word';
 
-Your current config is mostly okay, but use this cleaner version:
+    for (const node of contentNodes) {
+      body.appendChild(node);
+    }
 
-extended_valid_elements: 'style[type],ol[class|style|start|type],ul[class|style],li[class|style],span[class|style]',
-valid_elements: '*[*]',
+    if (!body.innerHTML.trim()) {
+      body.innerHTML = '&nbsp;';
+    }
 
-That part is not the root cause, but keep it as-is.
+    row.append(marker, body);
+    item.appendChild(row);
 
-⸻
-
-Most likely root cause in your screenshots
-
-From your screenshots, the strongest issue looks like this:
-	•	nested list items are being indented visually
-	•	but the nested <ol> is not always attached to the correct <li>
-	•	then your preview PDF engine renders them as separate ordered lists
-
-So your actual fix is not toolbar config.
-It is HTML normalization before preview.
-
-⸻
-
-Final code you should use
-
-getHierarchicalListStyle()
-
-private getHierarchicalListStyle(): string {
-  return `
-    <style>
-      .hierarchical-list,
-      .hierarchical-list ol {
-        list-style: none !important;
-        margin: 0 !important;
-        padding-left: 42px !important;
-        counter-reset: item;
+    for (const nestedList of nestedLists) {
+      if (nestedList instanceof HTMLOListElement) {
+        this.decorateOrderedList(nestedList, currentPath);
+      } else if (nestedList instanceof HTMLUListElement) {
+        nestedList.style.margin = '0.35rem 0 0 1.5rem';
       }
-
-      .hierarchical-list li {
-        display: block;
-        position: relative;
-        margin: 6px 0;
-      }
-
-      .hierarchical-list li::before {
-        content: counters(item, ".") ". ";
-        counter-increment: item;
-        position: absolute;
-        left: -42px;
-        width: 36px;
-        text-align: right;
-        white-space: nowrap;
-      }
-    </style>
-  `;
-}
-
-normalizeNestedOrderedLists()
-
-private normalizeNestedOrderedLists(root: HTMLElement): void {
-  const allOrderedLists = Array.from(root.querySelectorAll('ol'));
-
-  allOrderedLists.forEach((ol) => {
-    let node = ol.firstChild;
-
-    while (node) {
-      const nextNode = node.nextSibling;
-
-      if (
-        node.nodeType === Node.ELEMENT_NODE &&
-        (node as HTMLElement).tagName.toLowerCase() === 'ol'
-      ) {
-        let previousElement = node.previousSibling;
-
-        while (previousElement && previousElement.nodeType !== Node.ELEMENT_NODE) {
-          previousElement = previousElement.previousSibling;
-        }
-
-        if (
-          previousElement &&
-          (previousElement as HTMLElement).tagName.toLowerCase() === 'li'
-        ) {
-          previousElement.appendChild(node);
-        }
-      }
-
-      node = nextNode;
+      item.appendChild(nestedList);
     }
   });
 }
 
-buildPreviewHtml()
 
-private buildPreviewHtml(editorHtml: string): string {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(`<div id="root">${editorHtml}</div>`, 'text/html');
-  const root = doc.getElementById('root');
+⸻
 
-  if (!root) {
-    return editorHtml;
+2. Update getOrderedListStyle(...)
+
+Replace your current method with this:
+
+private getOrderedListStyle(list: HTMLOListElement): OrderedListStyle {
+  const inlineStyle = list.style.listStyleType?.trim().toLowerCase();
+
+  if (this.isSupportedOrderedListStyle(inlineStyle)) {
+    return inlineStyle;
   }
 
-  this.normalizeNestedOrderedLists(root);
+  const type = list.getAttribute('type');
 
-  const orderedLists = root.querySelectorAll('ol');
-  orderedLists.forEach((ol) => {
-    ol.classList.add('hierarchical-list');
-    ol.removeAttribute('type');
-    ol.removeAttribute('start');
-    (ol as HTMLElement).style.listStyle = 'none';
-  });
-
-  const listItems = root.querySelectorAll('li');
-  listItems.forEach((li) => {
-    (li as HTMLElement).style.listStyle = 'none';
-  });
-
-  return `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="UTF-8" />
-        ${this.getHierarchicalListStyle()}
-      </head>
-      <body>
-        ${root.innerHTML}
-      </body>
-    </html>
-  `;
+  switch (type) {
+    case 'a':
+      return 'lower-alpha';
+    case 'A':
+      return 'upper-alpha';
+    case 'i':
+      return 'lower-roman';
+    case 'I':
+      return 'upper-roman';
+    default:
+      return 'decimal';
+  }
 }
 
 
 ⸻
 
-One more important warning
+3. If you want start and type to be added before preview rendering
 
-If your backend PDF engine does not support CSS counters or ::before, then even correct HTML + CSS will still fail.
+Inside your buildPreviewHtml(content: string): string, keep this:
 
-Then you must generate the numbers manually in HTML text instead of relying on CSS counters.
+private buildPreviewHtml(content: string): string {
+  const root = document.createElement('div');
+  root.innerHTML = content;
 
-But first try the normalization fix above, because your current output still looks structurally broken more than CSS-broken.
+  root.style.fontFamily = 'Georgia, serif';
+  root.style.fontSize = '16px';
+  root.style.lineHeight = '1.6';
+  root.style.color = '#1f2a37';
 
-Paste your actual editor.getContent() output here and I’ll tell you in one shot whether the remaining issue is:
-	•	malformed HTML
-	•	TinyMCE behavior
-	•	or PDF engine not supporting CSS counters.
+  this.applyElementStyles(root);
+  this.decorateOrderedLists(root);
+
+  return root.innerHTML;
+}
+
+This is fine already.
+
+⸻
+
+4. TinyMCE config update
+
+Your extended_valid_elements should include li also, not only ol.
+
+Change it to:
+
+extended_valid_elements:
+  'style[type],ol[class|style|start|type],ul[class|style],li[class|style|value|data-list-index|data-list-type],button[onclick|class|style|id|type],span[id|class|style],div[class|style|data-*]',
+
+And keep:
+
+valid_elements: '*[*]',
+advlist_number_styles: 'default,lower-alpha,lower-roman,upper-alpha,upper-roman',
+
+
+⸻
+
+5. If you want a small helper for OrderedListStyle
+
+Make sure your type supports all values:
+
+type OrderedListStyle =
+  | 'decimal'
+  | 'decimal-leading-zero'
+  | 'lower-alpha'
+  | 'upper-alpha'
+  | 'lower-roman'
+  | 'upper-roman';
+
+
+⸻
+
+What this gives you
+
+Now your generated HTML will preserve:
+
+<ol start="3" type="A" style="list-style-type: upper-alpha;">
+
+And each li will also carry:
+
+<li data-list-index="3" data-list-type="A">
+
+So your preview logic still works, and the original ordered-list metadata is preserved.
+
+If you want, I can now give you one full merged copy-paste version of all related methods together.
