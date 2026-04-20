@@ -1,61 +1,54 @@
-Because you must use the same HTML for both PDF and DOCX, the safest fix is:
+Use real ol/li in TinyMCE, and for both PDF + DOCX use the same cleaned semantic list HTML with minimal inline styles only.
 
-Stop using both of these
+The key is:
 
-* native <ol><li> markers
-* CSS layout hacks like table, table-cell, flex
+* keep native <ol><li>
+* do not inject custom marker spans like 1., 2.1.
+* do not use flex, table, table-cell
+* only set start, type, margins, and padding
+* keep nested <ol> inside <li>
 
-Use one portable format for both
+That is the most compatible version for:
 
-Convert ordered lists into plain paragraphs with marker text inside the content.
+* TinyMCE editing
+* PDF rendering
+* DOCX API rendering
 
-That avoids:
+Important limitation
 
-* DOCX adding its own bullets/numbers
-* PDF and DOCX rendering differently
-* unsupported CSS layout issues
+With pure native ol/li, most DOCX APIs support:
 
-⸻
+* 1, 2, 3
+* A, B, C
+* a, b, c
+* I, II, III
+* i, ii, iii
 
-Best single-format approach
+But many DOCX HTML engines do not support true hierarchical numbering like 1.1, 1.1.1 from HTML alone.
 
-Generate HTML like this:
-
-<p style="margin:0 0 8px 0; padding-left:32px; text-indent:-32px;">
-  <span style="font-weight:700;">1.</span> First item
-</p>
-<p style="margin:0 0 8px 32px; padding-left:40px; text-indent:-40px;">
-  <span style="font-weight:700;">1.1.</span> Nested item
-</p>
-
-This works much better across:
-
-* browser preview
-* PDF renderers
-* DOCX HTML importers
-
-It is an old-school hanging-indent format, and DOCX engines usually handle it much better than flex or table.
+So this code will give you the best cross-compatible native list behavior, but if your DOCX API specifically requires 1.1.1 visual numbering, that is usually an API limitation, not an HTML one.
 
 ⸻
 
-What you should do
+Full working code
 
-Instead of decorating <li> visually but keeping <ol>/<li>, you should replace ordered lists with paragraph blocks.
+1. Ordered list type
 
-That means:
-
-* no native list bullets
-* no double numbering
-* no flex/table
-* same HTML for PDF and DOCX
+type OrderedListStyle =
+  | 'decimal'
+  | 'decimal-leading-zero'
+  | 'lower-alpha'
+  | 'upper-alpha'
+  | 'lower-roman'
+  | 'upper-roman';
 
 ⸻
 
-Copy-paste solution
+2. Main HTML builder for both PDF and DOCX
 
-1. Replace your preview builder with a portable builder
+Use this same method for both files:
 
-private buildPortableHtml(content: string): string {
+private buildExportHtml(content: string): string {
   const root = document.createElement('div');
   root.innerHTML = content;
   root.style.fontFamily = 'Georgia, serif';
@@ -63,200 +56,284 @@ private buildPortableHtml(content: string): string {
   root.style.lineHeight = '1.6';
   root.style.color = '#1f2a37';
   this.applyElementStyles(root);
-  this.transformOrderedListsToPortableBlocks(root);
+  this.normalizeOrderedLists(root);
   return root.innerHTML;
 }
 
-Use this same method for:
-
-* PDF HTML
-* DOCX HTML
-* preview HTML
-
 ⸻
 
-2. Add this main transformer
+3. Normalize ordered lists to real ol/li only
 
-private transformOrderedListsToPortableBlocks(root: HTMLElement): void {
-  const topLevelLists = Array.from(root.querySelectorAll('ol')).filter(
-    (list) => !list.parentElement?.closest('ol')
-  ) as HTMLOListElement[];
-  for (const list of topLevelLists) {
-    const fragment = document.createDocumentFragment();
-    this.appendPortableOrderedList(list, [], fragment);
-    list.replaceWith(fragment);
+private normalizeOrderedLists(root: HTMLElement): void {
+  const orderedLists = Array.from(root.querySelectorAll('ol'));
+  for (const list of orderedLists) {
+    const ol = list as HTMLOListElement;
+    const level = this.getOrderedListLevel(ol);
+    const style = this.resolveOrderedListStyleByLevel(ol, level);
+    const start = parseInt(ol.getAttribute('start') || '1', 10);
+    ol.setAttribute('start', String(Number.isNaN(start) ? 1 : start));
+    ol.setAttribute('type', this.mapOrderedListStyleToType(style));
+    ol.style.listStyleType = style;
+    ol.style.marginTop = '0';
+    ol.style.marginBottom = '0.75rem';
+    ol.style.paddingLeft = `${2 + level * 1.25}rem`;
+    // remove preview-only styles/attrs if they were previously added
+    ol.style.removeProperty('display');
+    ol.style.removeProperty('table-layout');
+    ol.style.removeProperty('width');
+    ol.style.removeProperty('align-items');
+  }
+  const listItems = Array.from(root.querySelectorAll('li'));
+  for (const item of listItems) {
+    const li = item as HTMLLIElement;
+    li.style.margin = '0.2rem 0';
+    li.style.padding = '0';
+    li.style.removeProperty('list-style');
+    li.removeAttribute('data-list-index');
+    li.removeAttribute('data-list-type');
+    // remove preview wrapper div/span if previously generated
+    this.unwrapPreviewArtifacts(li);
+    // normalize direct paragraphs/divs inside li
+    const directChildren = Array.from(li.childNodes);
+    for (const child of directChildren) {
+      if (!(child instanceof HTMLElement)) {
+        continue;
+      }
+      const tag = child.tagName.toLowerCase();
+      if ((tag === 'p' || tag === 'div') && !child.querySelector('ol, ul')) {
+        child.style.margin = '0';
+        child.style.display = 'inline';
+      }
+    }
   }
 }
 
 ⸻
 
-3. Add recursive ordered-list converter
+4. Remove preview wrappers if old decorated HTML exists
 
-private appendPortableOrderedList(
+private unwrapPreviewArtifacts(li: HTMLLIElement): void {
+  const children = Array.from(li.children);
+  if (children.length !== 1) {
+    return;
+  }
+  const first = children[0] as HTMLElement;
+  const looksLikePreviewRow =
+    first.tagName.toLowerCase() === 'div' &&
+    (
+      first.style.display === 'flex' ||
+      first.style.display === 'table'
+    );
+  if (!looksLikePreviewRow) {
+    return;
+  }
+  const rowChildren = Array.from(first.children) as HTMLElement[];
+  if (rowChildren.length < 2) {
+    return;
+  }
+  const possibleBody = rowChildren[1];
+  const fragment = document.createDocumentFragment();
+  while (possibleBody.firstChild) {
+    fragment.appendChild(possibleBody.firstChild);
+  }
+  first.replaceWith(fragment);
+}
+
+⸻
+
+5. Get list level
+
+private getOrderedListLevel(list: HTMLOListElement): number {
+  let level = 0;
+  let parent = list.parentElement;
+  while (parent) {
+    if (parent.tagName.toLowerCase() === 'ol') {
+      level++;
+    }
+    parent = parent.parentElement;
+  }
+  return level;
+}
+
+⸻
+
+6. Resolve list style by level
+
+This gives a stable pattern:
+
+* level 0 → decimal
+* level 1 → lower-alpha
+* level 2 → lower-roman
+* level 3 → decimal
+* then repeat
+
+private resolveOrderedListStyleByLevel(
   list: HTMLOListElement,
-  parentPath: Array<{ index: number; style: OrderedListStyle }>,
-  container: DocumentFragment | HTMLElement
-): void {
-  const listStyle = this.getOrderedListStyle(list);
-  const start = parseInt(list.getAttribute('start') || '1', 10);
-  const items = Array.from(list.children).filter(
-    (child): child is HTMLLIElement => child instanceof HTMLLIElement
-  );
-  items.forEach((item, index) => {
-    const currentIndex = start + index;
-    const currentPath = [...parentPath, { index: currentIndex, style: listStyle }];
-    const childNodes = Array.from(item.childNodes);
-    const nestedLists = childNodes.filter(
-      (node): node is HTMLOListElement =>
-        node instanceof HTMLOListElement
-    );
-    const contentNodes = this.normalizePortableContentNodes(
-      childNodes.filter((node) => !(node instanceof HTMLOListElement))
-    );
-    const paragraph = document.createElement('p');
-    const level = currentPath.length - 1;
-    const indent = 32 + level * 28; // tweak if needed
-    const hanging = 32;
-    paragraph.style.margin = `0 0 8px ${level * 28}px`;
-    paragraph.style.paddingLeft = `${hanging}px`;
-    paragraph.style.textIndent = `-${hanging}px`;
-    paragraph.style.lineHeight = '1.6';
-    paragraph.style.color = '#1f2a37';
-    const marker = document.createElement('span');
-    marker.textContent = `${this.formatMarkerPath(currentPath)}. `;
-    marker.style.fontWeight = '700';
-    marker.style.color = '#1f2a37';
-    paragraph.appendChild(marker);
-    if (contentNodes.length === 0) {
-      paragraph.appendChild(document.createTextNode('\u00A0'));
-    } else {
-      for (const node of contentNodes) {
-        paragraph.appendChild(node);
-      }
-    }
-    container.appendChild(paragraph);
-    for (const nestedList of nestedLists) {
-      this.appendPortableOrderedList(nestedList, currentPath, container);
-    }
-  });
-}
-
-⸻
-
-4. Replace your content normalizer with this
-
-private normalizePortableContentNodes(nodes: ChildNode[]): ChildNode[] {
-  const normalized: ChildNode[] = [];
-  for (const node of nodes) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.textContent?.replace(/\s+/g, ' ').trim() ?? '';
-      if (text) {
-        normalized.push(document.createTextNode(text));
-      }
-      continue;
-    }
-    if (!(node instanceof HTMLElement)) {
-      continue;
-    }
-    const tag = node.tagName.toLowerCase();
-    // unwrap common block wrappers from TinyMCE
-    if (tag === 'p' || tag === 'div') {
-      const text = node.textContent?.replace(/\s+/g, ' ').trim() ?? '';
-      if (text) {
-        normalized.push(document.createTextNode(text));
-      }
-      continue;
-    }
-    // keep inline tags, but remove troublesome margins
-    node.style.margin = '0';
-    node.style.display = 'inline';
-    normalized.push(node);
+  level: number
+): OrderedListStyle {
+  const inlineStyle = list.style.listStyleType?.trim().toLowerCase();
+  if (this.isSupportedOrderedListStyle(inlineStyle)) {
+    return inlineStyle;
   }
-  return normalized;
+  const type = list.getAttribute('type');
+  if (type) {
+    switch (type) {
+      case '1':
+        return 'decimal';
+      case 'a':
+        return 'lower-alpha';
+      case 'A':
+        return 'upper-alpha';
+      case 'i':
+        return 'lower-roman';
+      case 'I':
+        return 'upper-roman';
+    }
+  }
+  const styles: OrderedListStyle[] = [
+    'decimal',
+    'lower-alpha',
+    'lower-roman',
+    'decimal'
+  ];
+  return styles[level % styles.length];
 }
 
 ⸻
 
-5. Keep your existing marker helpers
+7. Supported styles checker
 
-Keep using:
+private isSupportedOrderedListStyle(
+  value: string | null | undefined
+): value is OrderedListStyle {
+  return (
+    value === 'decimal' ||
+    value === 'decimal-leading-zero' ||
+    value === 'lower-alpha' ||
+    value === 'upper-alpha' ||
+    value === 'lower-roman' ||
+    value === 'upper-roman'
+  );
+}
 
-* getOrderedListStyle(...)
-* formatMarkerPath(...)
-* formatMarkerSegment(...)
-* toAlphabetic(...)
-* toRoman(...)
+⸻
 
-Those are fine.
+8. Map style to HTML type
+
+private mapOrderedListStyleToType(style: OrderedListStyle): string {
+  switch (style) {
+    case 'lower-alpha':
+      return 'a';
+    case 'upper-alpha':
+      return 'A';
+    case 'lower-roman':
+      return 'i';
+    case 'upper-roman':
+      return 'I';
+    case 'decimal':
+    case 'decimal-leading-zero':
+    default:
+      return '1';
+  }
+}
+
+⸻
+
+9. Apply normal styles, but do not break list items
+
+private applyElementStyles(root: HTMLElement): void {
+  const headings = root.querySelectorAll('h1, h2, h3');
+  for (const heading of headings) {
+    const element = heading as HTMLElement;
+    element.style.color = '#1f2a37';
+    element.style.fontFamily = 'Georgia, serif';
+    element.style.margin = '0 0 0.75rem';
+    element.style.lineHeight = '1.15';
+  }
+  const paragraphs = root.querySelectorAll('p');
+  for (const paragraph of paragraphs) {
+    const element = paragraph as HTMLElement;
+    if (element.closest('li')) {
+      element.style.margin = '0';
+      element.style.display = 'inline';
+    } else {
+      element.style.margin = '0 0 0.75rem';
+    }
+    element.style.color = '#4c5b6b';
+  }
+  const divs = root.querySelectorAll('li > div');
+  for (const div of divs) {
+    const element = div as HTMLElement;
+    if (!element.querySelector('ol, ul')) {
+      element.style.margin = '0';
+      element.style.display = 'inline';
+    }
+  }
+}
 
 ⸻
 
 How to use it
 
-Wherever you currently do:
+For PDF
 
-const html = this.buildPreviewHtml(content);
+const htmlForPdf = this.buildExportHtml(this.editorHtml);
 
-change it to:
+For DOCX
 
-const html = this.buildPortableHtml(content);
+const htmlForDocx = this.buildExportHtml(this.editorHtml);
 
-And send that same HTML to:
-
-* PDF generator
-* DOCX generator
+Use the same HTML for both.
 
 ⸻
 
-Why this fixes both
+TinyMCE config
 
-Your current bad DOCX output happens because Word sees:
+Use this so TinyMCE keeps ol/li/start/type safely:
 
-* real list structure
-* plus your custom visual number
-
-So it renders both.
-
-With the new portable HTML:
-
-* there is no <ol> or <li> left after transformation
-* number is plain text inside paragraph
-* indentation is simple paragraph CSS
-* DOCX and PDF both read the same thing
+extended_valid_elements:
+  'ol[start|type|style|class],ul[style|class],li[style|class],span[style|class],div[style|class],p[style|class]',
+valid_elements: '*[*]',
+advlist_number_styles: 'default,lower-alpha,lower-roman,upper-alpha,upper-roman',
+advlist_bullet_styles: 'disc,circle,square',
 
 ⸻
 
-Tradeoff
+What this code fixes
 
-This is the honest tradeoff:
+It fixes:
 
-* You gain consistent output in both PDF and DOCX
-* You lose native editable Word list semantics
-
-But since your external DOCX API is not reliably supporting your current list HTML, this is the most stable single-HTML solution.
-
-⸻
-
-One important note
-
-Do not call your old decorateOrderedLists(root) anymore for export content, because that creates layout-specific HTML.
-
-Use only:
-
-this.transformOrderedListsToPortableBlocks(root);
+* broken custom preview wrappers
+* flex/table CSS issues in DOCX
+* duplicate custom numbering text
+* list text appearing on the next line because of <p> wrappers
+* preserving real ol/li for TinyMCE Enter behavior
 
 ⸻
 
-Final recommendation
+What it does not guarantee
 
-For your case, the most reliable shared pipeline is:
+It does not guarantee true 1.1, 1.1.1 rendering in DOCX if your external DOCX API does not support multilevel HTML lists properly.
 
-const finalHtml = this.buildPortableHtml(editorHtml);
+That part depends on the DOCX API.
 
-Use that same finalHtml for:
+If your API only understands standard HTML list levels, then this code will still produce:
 
-* preview
-* PDF
-* DOCX
+* level 1: 1, 2, 3
+* level 2: a, b, c
+* level 3: i, ii, iii
 
-If you want, I can give you one merged final copy-paste block with all methods together in the exact order for your Angular component.
+which is the most compatible native HTML approach.
+
+⸻
+
+If you need exact 1.1.1 in DOCX too
+
+Then there are only two real options:
+
+* use a DOCX API/library that supports true multilevel numbering definitions
+* or generate a separate export-only HTML version
+
+With the same single HTML and real ol/li, exact hierarchical numbering in DOCX is usually not reliable.
+
+If you want, paste your current export function and I’ll wire this full code into your component flow exactly.
