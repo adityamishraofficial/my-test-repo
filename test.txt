@@ -1,339 +1,281 @@
-Use real ol/li in TinyMCE, and for both PDF + DOCX use the same cleaned semantic list HTML with minimal inline styles only.
+Then do not generate numbering in <span> at all.
 
-The key is:
+If you want it to behave like MS Word inside TinyMCE, the list must remain a real nested ordered list:
 
-* keep native <ol><li>
-* do not inject custom marker spans like 1., 2.1.
-* do not use flex, table, table-cell
-* only set start, type, margins, and padding
-* keep nested <ol> inside <li>
+<ol>
+  <li>Item 1</li>
+  <li>
+    Item 2
+    <ol>
+      <li>Item 2.1</li>
+      <li>Item 2.2
+        <ol>
+          <li>Item 2.2.1</li>
+        </ol>
+      </li>
+    </ol>
+  </li>
+  <li>Item 3</li>
+</ol>
 
-That is the most compatible version for:
+Your current issue
 
-* TinyMCE editing
-* PDF rendering
-* DOCX API rendering
+Your current logic is breaking Word-like behavior because you are doing this in preview/build logic:
+
+* reading editor HTML
+* traversing <ol>/<li>
+* replacing normal list rendering with custom div + span
+* flattening/normalizing nodes
+* injecting marker text manually
+
+That means the content is no longer a true editable list structure.
+
+So:
+
+* Enter does not continue numbering correctly
+* Tab/Shift+Tab does not behave like Word
+* nested counters become inconsistent
+* PDF/DOCX may show duplicated numbering
+
+⸻
+
+What you actually need
+
+You need real nested <ol><li> only, and numbering should come from:
+
+* browser/TinyMCE native list structure
+* or CSS counters on <ol>/<li>
+* but never by injecting marker spans into each row
+
+⸻
+
+Correct approach
+
+1) Remove this logic completely for editor content
+
+These methods are the wrong direction for Word-like editing:
+
+* decorateOrderedLists(root)
+* decorateOrderedList(...)
+* formatMarkerPath(...)
+* formatMarkerSegment(...)
+
+Because they are building fake numbering.
+
+Remove them from editor rendering flow.
+
+So this:
+
+this.decorateOrderedLists(root);
+
+should be removed from:
+
+buildPreviewHtml(content: string)
+
+⸻
+
+2) Keep editor HTML as true nested lists
+
+Your TinyMCE content should stay like this:
+
+<ol class="legal-ol">
+  <li>vjfv</li>
+  <li>
+    jhjgdh
+    <ol>
+      <li>gjhgh</li>
+      <li>
+        vhjfrv
+        <ol>
+          <li>jhhvjf</li>
+          <li>vkjfhvk</li>
+        </ol>
+      </li>
+    </ol>
+  </li>
+  <li>jbvcb</li>
+  <li>bfgmb</li>
+</ol>
+
+No manual marker spans.
+
+⸻
+
+3) Use CSS counters on real <ol><li>
+
+For 1, 1.1, 1.1.1, use CSS like this:
+
+private buildPreviewHtml(content: string): string {
+  const root = document.createElement('div');
+  root.innerHTML = content;
+  this.applyElementStyles(root);
+  this.prepareNestedOrderedLists(root);
+  const style = document.createElement('style');
+  style.textContent = `
+    ol.legal-ol,
+    ol.legal-ol ol {
+      counter-reset: item;
+      list-style: none;
+      margin: 0 0 1rem 0;
+      padding-left: 2rem;
+    }
+    ol.legal-ol li,
+    ol.legal-ol ol li {
+      display: block;
+      position: relative;
+      margin: 0.35rem 0;
+    }
+    ol.legal-ol li::before,
+    ol.legal-ol ol li::before {
+      counter-increment: item;
+      content: counters(item, ".") ". ";
+      position: absolute;
+      left: -2rem;
+      white-space: nowrap;
+      font-weight: 700;
+      color: #1f2a37;
+    }
+  `;
+  return `${style.outerHTML}${root.innerHTML}`;
+}
+
+⸻
+
+4) Add class only, do not rebuild items
+
+Use a lightweight method like this:
+
+private prepareNestedOrderedLists(root: HTMLElement): void {
+  const orderedLists = root.querySelectorAll('ol');
+  orderedLists.forEach((list) => {
+    const ol = list as HTMLOListElement;
+    ol.classList.add('legal-ol');
+    ol.style.margin = '0 0 1rem 0';
+    ol.style.paddingLeft = '2rem';
+  });
+  const items = root.querySelectorAll('li');
+  items.forEach((li) => {
+    const item = li as HTMLLIElement;
+    item.style.margin = '0.35rem 0';
+  });
+}
+
+This keeps the list real.
+
+⸻
 
 Important limitation
 
-With pure native ol/li, most DOCX APIs support:
+There is one very important truth here:
 
-* 1, 2, 3
-* A, B, C
-* a, b, c
-* I, II, III
-* i, ii, iii
+TinyMCE does not natively behave exactly like MS Word for multilevel legal numbering
 
-But many DOCX HTML engines do not support true hierarchical numbering like 1.1, 1.1.1 from HTML alone.
+TinyMCE supports nested ordered lists, but 1.1.1 style is usually display styling, not a full Word numbering engine.
 
-So this code will give you the best cross-compatible native list behavior, but if your DOCX API specifically requires 1.1.1 visual numbering, that is usually an API limitation, not an HTML one.
+So if you want exact Word-like behavior on:
 
-⸻
+* Enter
+* Tab / Shift+Tab
+* restart numbering
+* mixed alpha/roman/decimal
+* true list semantics in DOCX
 
-Full working code
+then the editor must keep clean nested <ol><li>, and the DOCX generator must understand real nested lists.
 
-1. Ordered list type
-
-type OrderedListStyle =
-  | 'decimal'
-  | 'decimal-leading-zero'
-  | 'lower-alpha'
-  | 'upper-alpha'
-  | 'lower-roman'
-  | 'upper-roman';
+If your external DOCX API does not support CSS counters well, then browser preview can look right but DOCX may still fail.
 
 ⸻
 
-2. Main HTML builder for both PDF and DOCX
+Why your current code is failing
 
-Use this same method for both files:
+From your screenshots, this block is the problem:
 
-private buildExportHtml(content: string): string {
-  const root = document.createElement('div');
-  root.innerHTML = content;
-  root.style.fontFamily = 'Georgia, serif';
-  root.style.fontSize = '16px';
-  root.style.lineHeight = '1.6';
-  root.style.color = '#1f2a37';
-  this.applyElementStyles(root);
-  this.normalizeOrderedLists(root);
-  return root.innerHTML;
-}
+const marker = document.createElement('span');
+marker.textContent = `${this.formatMarkerPath(currentPath)}.`;
+
+That line means you are no longer using actual list numbering. You are just printing text.
+
+That is why it does not behave like Word.
 
 ⸻
 
-3. Normalize ordered lists to real ol/li only
+What you should do now
 
-private normalizeOrderedLists(root: HTMLElement): void {
-  const orderedLists = Array.from(root.querySelectorAll('ol'));
-  for (const list of orderedLists) {
-    const ol = list as HTMLOListElement;
-    const level = this.getOrderedListLevel(ol);
-    const style = this.resolveOrderedListStyleByLevel(ol, level);
-    const start = parseInt(ol.getAttribute('start') || '1', 10);
-    ol.setAttribute('start', String(Number.isNaN(start) ? 1 : start));
-    ol.setAttribute('type', this.mapOrderedListStyleToType(style));
-    ol.style.listStyleType = style;
-    ol.style.marginTop = '0';
-    ol.style.marginBottom = '0.75rem';
-    ol.style.paddingLeft = `${2 + level * 1.25}rem`;
-    // remove preview-only styles/attrs if they were previously added
-    ol.style.removeProperty('display');
-    ol.style.removeProperty('table-layout');
-    ol.style.removeProperty('width');
-    ol.style.removeProperty('align-items');
-  }
-  const listItems = Array.from(root.querySelectorAll('li'));
-  for (const item of listItems) {
-    const li = item as HTMLLIElement;
-    li.style.margin = '0.2rem 0';
-    li.style.padding = '0';
-    li.style.removeProperty('list-style');
-    li.removeAttribute('data-list-index');
-    li.removeAttribute('data-list-type');
-    // remove preview wrapper div/span if previously generated
-    this.unwrapPreviewArtifacts(li);
-    // normalize direct paragraphs/divs inside li
-    const directChildren = Array.from(li.childNodes);
-    for (const child of directChildren) {
-      if (!(child instanceof HTMLElement)) {
-        continue;
-      }
-      const tag = child.tagName.toLowerCase();
-      if ((tag === 'p' || tag === 'div') && !child.querySelector('ol, ul')) {
-        child.style.margin = '0';
-        child.style.display = 'inline';
-      }
-    }
-  }
-}
+Keep only these two responsibilities:
+
+In TinyMCE editor
+
+Store real list HTML only.
+
+In preview
+
+Apply CSS counters to the same <ol><li> structure.
+
+Do not convert list items into spans/div rows.
 
 ⸻
 
-4. Remove preview wrappers if old decorated HTML exists
+Final fix direction
 
-private unwrapPreviewArtifacts(li: HTMLLIElement): void {
-  const children = Array.from(li.children);
-  if (children.length !== 1) {
-    return;
-  }
-  const first = children[0] as HTMLElement;
-  const looksLikePreviewRow =
-    first.tagName.toLowerCase() === 'div' &&
-    (
-      first.style.display === 'flex' ||
-      first.style.display === 'table'
-    );
-  if (!looksLikePreviewRow) {
-    return;
-  }
-  const rowChildren = Array.from(first.children) as HTMLElement[];
-  if (rowChildren.length < 2) {
-    return;
-  }
-  const possibleBody = rowChildren[1];
-  const fragment = document.createDocumentFragment();
-  while (possibleBody.firstChild) {
-    fragment.appendChild(possibleBody.firstChild);
-  }
-  first.replaceWith(fragment);
-}
+Remove
+
+* manual marker generation
+* formatMarkerPath
+* formatMarkerSegment
+* replacing li children with custom rows
+* item.replaceChildren()
+* custom div/span/flex marker layout
+
+Keep
+
+* real nested <ol><li>
+* TinyMCE lists and advlist plugins
+* CSS counters for preview only
 
 ⸻
 
-5. Get list level
+TinyMCE config you should use
 
-private getOrderedListLevel(list: HTMLOListElement): number {
-  let level = 0;
-  let parent = list.parentElement;
-  while (parent) {
-    if (parent.tagName.toLowerCase() === 'ol') {
-      level++;
-    }
-    parent = parent.parentElement;
-  }
-  return level;
-}
-
-⸻
-
-6. Resolve list style by level
-
-This gives a stable pattern:
-
-* level 0 → decimal
-* level 1 → lower-alpha
-* level 2 → lower-roman
-* level 3 → decimal
-* then repeat
-
-private resolveOrderedListStyleByLevel(
-  list: HTMLOListElement,
-  level: number
-): OrderedListStyle {
-  const inlineStyle = list.style.listStyleType?.trim().toLowerCase();
-  if (this.isSupportedOrderedListStyle(inlineStyle)) {
-    return inlineStyle;
-  }
-  const type = list.getAttribute('type');
-  if (type) {
-    switch (type) {
-      case '1':
-        return 'decimal';
-      case 'a':
-        return 'lower-alpha';
-      case 'A':
-        return 'upper-alpha';
-      case 'i':
-        return 'lower-roman';
-      case 'I':
-        return 'upper-roman';
-    }
-  }
-  const styles: OrderedListStyle[] = [
-    'decimal',
-    'lower-alpha',
-    'lower-roman',
-    'decimal'
-  ];
-  return styles[level % styles.length];
-}
+editorConfig = {
+  menubar: true,
+  plugins: 'lists advlist table help',
+  toolbar: `
+    undo redo |
+    bold italic underline |
+    numlist bullist |
+    outdent indent
+  `,
+  advlist_bullet_styles: ['default', 'circle', 'square'],
+  advlist_number_styles: ['default', 'lower-alpha', 'lower-roman', 'upper-alpha', 'upper-roman'],
+  valid_elements: '*[*]',
+  valid_children: '+body[ol,ul],+ol[li],+ul[li],+li[ol,ul,p,div,span,strong,em,u,br]',
+  forced_root_block: 'p'
+};
 
 ⸻
 
-7. Supported styles checker
+One more important point
 
-private isSupportedOrderedListStyle(
-  value: string | null | undefined
-): value is OrderedListStyle {
-  return (
-    value === 'decimal' ||
-    value === 'decimal-leading-zero' ||
-    value === 'lower-alpha' ||
-    value === 'upper-alpha' ||
-    value === 'lower-roman' ||
-    value === 'upper-roman'
-  );
-}
+If your goal is:
 
-⸻
+* editor behaves like Word
+* preview shows 1.1.1
+* DOCX also shows true numbering
 
-8. Map style to HTML type
+then the best solution is:
 
-private mapOrderedListStyleToType(style: OrderedListStyle): string {
-  switch (style) {
-    case 'lower-alpha':
-      return 'a';
-    case 'upper-alpha':
-      return 'A';
-    case 'lower-roman':
-      return 'i';
-    case 'upper-roman':
-      return 'I';
-    case 'decimal':
-    case 'decimal-leading-zero':
-    default:
-      return '1';
-  }
-}
+1. keep real nested list in TinyMCE
+2. preview with CSS counters
+3. DOCX generation should be based on real nested list support, not fake marker spans
+
+If DOCX API cannot support nested ordered lists properly, then that DOCX engine is the bottleneck, not TinyMCE.
 
 ⸻
 
-9. Apply normal styles, but do not break list items
+I can now give you the exact cleaned Angular code for:
 
-private applyElementStyles(root: HTMLElement): void {
-  const headings = root.querySelectorAll('h1, h2, h3');
-  for (const heading of headings) {
-    const element = heading as HTMLElement;
-    element.style.color = '#1f2a37';
-    element.style.fontFamily = 'Georgia, serif';
-    element.style.margin = '0 0 0.75rem';
-    element.style.lineHeight = '1.15';
-  }
-  const paragraphs = root.querySelectorAll('p');
-  for (const paragraph of paragraphs) {
-    const element = paragraph as HTMLElement;
-    if (element.closest('li')) {
-      element.style.margin = '0';
-      element.style.display = 'inline';
-    } else {
-      element.style.margin = '0 0 0.75rem';
-    }
-    element.style.color = '#4c5b6b';
-  }
-  const divs = root.querySelectorAll('li > div');
-  for (const div of divs) {
-    const element = div as HTMLElement;
-    if (!element.querySelector('ol, ul')) {
-      element.style.margin = '0';
-      element.style.display = 'inline';
-    }
-  }
-}
+* buildPreviewHtml
+* prepareNestedOrderedLists
+* TinyMCE config
 
-⸻
-
-How to use it
-
-For PDF
-
-const htmlForPdf = this.buildExportHtml(this.editorHtml);
-
-For DOCX
-
-const htmlForDocx = this.buildExportHtml(this.editorHtml);
-
-Use the same HTML for both.
-
-⸻
-
-TinyMCE config
-
-Use this so TinyMCE keeps ol/li/start/type safely:
-
-extended_valid_elements:
-  'ol[start|type|style|class],ul[style|class],li[style|class],span[style|class],div[style|class],p[style|class]',
-valid_elements: '*[*]',
-advlist_number_styles: 'default,lower-alpha,lower-roman,upper-alpha,upper-roman',
-advlist_bullet_styles: 'disc,circle,square',
-
-⸻
-
-What this code fixes
-
-It fixes:
-
-* broken custom preview wrappers
-* flex/table CSS issues in DOCX
-* duplicate custom numbering text
-* list text appearing on the next line because of <p> wrappers
-* preserving real ol/li for TinyMCE Enter behavior
-
-⸻
-
-What it does not guarantee
-
-It does not guarantee true 1.1, 1.1.1 rendering in DOCX if your external DOCX API does not support multilevel HTML lists properly.
-
-That part depends on the DOCX API.
-
-If your API only understands standard HTML list levels, then this code will still produce:
-
-* level 1: 1, 2, 3
-* level 2: a, b, c
-* level 3: i, ii, iii
-
-which is the most compatible native HTML approach.
-
-⸻
-
-If you need exact 1.1.1 in DOCX too
-
-Then there are only two real options:
-
-* use a DOCX API/library that supports true multilevel numbering definitions
-* or generate a separate export-only HTML version
-
-With the same single HTML and real ol/li, exact hierarchical numbering in DOCX is usually not reliable.
-
-If you want, paste your current export function and I’ll wire this full code into your component flow exactly.
+with all your current manual-marker logic removed.
