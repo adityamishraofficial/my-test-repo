@@ -1,190 +1,252 @@
-The layout code is no longer the main problem.
+That confirms it: your PDF renderer supports your custom HTML layout, but the DOCX API does not.
 
-Your preview is still breaking because the list item text is still inside a block wrapper from TinyMCE, usually <p> or sometimes <div>, so even with flex the text starts on the next line.
+So the issue is not your numbering logic anymore.
+The issue is:
 
-That means this is not fixed by row/body/marker alone.
-You need to unwrap the content before appending it.
+* for preview/PDF, you are sending decorated HTML
+* for DOCX, the external API is interpreting <ol><li> differently and also rendering your custom marker text
+* result: native list bullet/number + your manual number text together
 
-Do this exact fix
+That is why Word shows:
 
-Replace your normalizeContentNodes() with this
+* a dot on left
+* then 1., 3.1., 3.1.2. as text
+* then content below
 
-private normalizeContentNodes(nodes: ChildNode[]): ChildNode[] {
-  const normalized: ChildNode[] = [];
+⸻
 
-  for (const node of nodes) {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const text = node.textContent?.replace(/\s+/g, ' ').trim() ?? '';
-      if (text) {
-        normalized.push(document.createTextNode(text));
-      }
-      continue;
+What you should do
+
+Do not send decorated HTML to DOCX API
+
+Your current decorated HTML is something like:
+
+<ol>
+  <li>
+    <div style="display:flex">
+      <span>3.1.</span>
+      <span>text</span>
+    </div>
+  </li>
+</ol>
+
+For DOCX generation, this is bad because:
+
+* <li> still has its own native marker
+* your <span>3.1.</span> is another marker
+* DOCX engine does not handle CSS/flex the same way as browser/PDF
+
+⸻
+
+Correct approach
+
+Use two separate HTML outputs:
+
+1. For preview / PDF
+
+Keep your current:
+
+this.decorateOrderedLists(root);
+
+2. For DOCX export
+
+Do not call decorateOrderedLists(root)
+
+Instead send only clean semantic HTML like:
+
+<ol start="1" type="1">
+  <li>fdsfsd</li>
+  <li>
+    fsdfds
+    <ol start="1" type="1">
+      <li>dsf</li>
+      <li>
+        dsf
+        <ol start="1" type="1">
+          <li>...</li>
+        </ol>
+      </li>
+    </ol>
+  </li>
+</ol>
+
+This is what DOCX engines understand best.
+
+⸻
+
+Exact fix in your code
+
+Your current preview method
+
+Keep this for browser preview:
+
+private buildPreviewHtml(content: string): string {
+  const root = document.createElement('div');
+  root.innerHTML = content;
+  root.style.fontFamily = 'Georgia, serif';
+  root.style.fontSize = '16px';
+  root.style.lineHeight = '1.6';
+  root.style.color = '#1f2a37';
+  this.applyElementStyles(root);
+  this.decorateOrderedLists(root);
+  return root.innerHTML;
+}
+
+⸻
+
+Add a separate DOCX method
+
+private buildDocxHtml(content: string): string {
+  const root = document.createElement('div');
+  root.innerHTML = content;
+  root.style.fontFamily = 'Georgia, serif';
+  root.style.fontSize = '16px';
+  root.style.lineHeight = '1.6';
+  root.style.color = '#1f2a37';
+  this.applyElementStyles(root);
+  this.prepareOrderedListsForDocx(root);
+  return root.innerHTML;
+}
+
+⸻
+
+Add this method
+
+private prepareOrderedListsForDocx(root: HTMLElement): void {
+  const orderedLists = Array.from(root.querySelectorAll('ol'));
+  for (const list of orderedLists) {
+    const ol = list as HTMLOListElement;
+    const start = parseInt(ol.getAttribute('start') || '1', 10);
+    ol.setAttribute('start', String(start));
+    const listStyle = this.getOrderedListStyle(ol);
+    const typeMap: Record<OrderedListStyle, string> = {
+      decimal: '1',
+      'decimal-leading-zero': '1',
+      'lower-alpha': 'a',
+      'upper-alpha': 'A',
+      'lower-roman': 'i',
+      'upper-roman': 'I'
+    };
+    const type = typeMap[listStyle];
+    if (type) {
+      ol.setAttribute('type', type);
     }
-
-    if (!(node instanceof HTMLElement)) {
-      normalized.push(node);
-      continue;
-    }
-
-    const tag = node.tagName.toLowerCase();
-
-    // unwrap block wrappers like <p> or <div> inside list item content
-    if (tag === 'p' || tag === 'div') {
-      const text = node.textContent?.replace(/\s+/g, ' ').trim() ?? '';
-      if (text) {
-        normalized.push(document.createTextNode(text));
-      }
-      continue;
-    }
-
-    // inline elements can stay
-    node.style.margin = '0';
-    normalized.push(node);
+    // keep native list behavior for DOCX engines
+    ol.style.listStyleType = listStyle;
+    ol.style.paddingLeft = '2rem';
+    ol.style.margin = '0 0 0.75rem';
   }
-
-  return normalized;
-}
-
-
-⸻
-
-Then use this exact block in decorateOrderedList()
-
-const row = document.createElement('div');
-row.style.display = 'flex';
-row.style.alignItems = 'flex-start';
-row.style.width = '100%';
-
-const marker = document.createElement('span');
-marker.textContent = `${this.formatMarkerPath(currentPath)}.`;
-marker.style.display = 'inline-block';
-marker.style.minWidth = `${Math.max(3.4, currentPath.length * 1.15 + 2.1)}rem`;
-marker.style.marginRight = '0.6rem';
-marker.style.textAlign = 'right';
-marker.style.whiteSpace = 'nowrap';
-marker.style.fontWeight = '700';
-marker.style.color = '#1f2a37';
-marker.style.flexShrink = '0';
-
-const body = document.createElement('span');
-body.style.flex = '1';
-body.style.wordBreak = 'break-word';
-(body.style as any).minWidth = '0';
-
-for (const node of contentNodes) {
-  body.appendChild(node);
-}
-
-if (!body.textContent?.trim()) {
-  body.innerHTML = '&nbsp;';
-}
-
-row.append(marker, body);
-item.appendChild(row);
-
-
-⸻
-
-Important change here
-
-Notice I changed:
-
-const body = document.createElement('div');
-
-to:
-
-const body = document.createElement('span');
-
-That matters.
-
-A div is block-level.
-A span keeps the first line content inline with the number more reliably.
-
-Since the parent row is flex, the span can still behave as a flex item.
-
-⸻
-
-Also clean applyElementStyles()
-
-Right now you are styling paragraphs globally:
-
-const paragraphs = root.querySelectorAll('p');
-for (const paragraph of paragraphs) {
-  const element = paragraph as HTMLElement;
-  element.style.margin = '0 0 0.75rem';
-  element.style.color = '#4c5b6b';
-}
-
-This is reintroducing block spacing into list items.
-
-Replace that paragraph block with this:
-
-const paragraphs = root.querySelectorAll('p');
-for (const paragraph of paragraphs) {
-  const element = paragraph as HTMLElement;
-
-  if (element.closest('li')) {
-    element.style.margin = '0';
-    element.style.display = 'inline';
-  } else {
-    element.style.margin = '0 0 0.75rem';
+  const items = Array.from(root.querySelectorAll('li'));
+  for (const item of items) {
+    const li = item as HTMLLIElement;
+    li.style.margin = '0.25rem 0';
+    li.style.listStyle = '';
   }
-
-  element.style.color = '#4c5b6b';
+  // make p inside li inline-friendly for doc engines
+  const paragraphsInsideLi = Array.from(root.querySelectorAll('li > p'));
+  for (const p of paragraphsInsideLi) {
+    const el = p as HTMLElement;
+    el.style.margin = '0';
+    el.style.display = 'inline';
+  }
+  // IMPORTANT: remove preview-only artifacts if they exist
+  const previewArtifacts = Array.from(
+    root.querySelectorAll('[data-list-index], [data-list-type]')
+  );
+  for (const artifact of previewArtifacts) {
+    artifact.removeAttribute('data-list-index');
+    artifact.removeAttribute('data-list-type');
+  }
 }
 
-
 ⸻
 
-Why it is still happening
+Very important
 
-Because your list item likely looks like this before normalization:
+If your editor content has already been mutated by decorateOrderedLists() and saved back, then DOCX will still break.
 
-<li>
-  <p>fsdfdfds</p>
+That means your saved HTML may already contain things like:
+
+<li data-list-index="1" data-list-type="1">
+  <div style="display:flex">
+    <span>1.</span>
+    <span>text</span>
+  </div>
 </li>
 
-So even if you append it into the right-side container, the <p> still behaves like a block and starts on a new line.
+If that is the case, then DOCX API will always render badly.
 
-You want it to become effectively:
-
-<li>
-  1. fsdfdfds
-</li>
-
-not:
-
-<li>
-  1.
-  <p>fsdfdfds</p>
-</li>
-
+So for DOCX, the HTML you send must be the original semantic HTML, not the preview-transformed HTML.
 
 ⸻
 
-Final 3 fixes you need
-	1.	normalizeContentNodes() must unwrap <p> and <div>
-	2.	body should be a span, not div
-	3.	applyElementStyles() must not apply block paragraph spacing inside li
+Rule you should follow
+
+Never save this for export:
+
+* display:flex
+* custom marker <span>1.2.3.</span>
+* data-list-index
+* data-list-type
+
+Save/send this for export:
+
+* pure <ol>
+* pure <li>
+* proper start
+* proper type
 
 ⸻
 
-Quick debug check
+Best architecture
 
-Inspect one broken list item in DevTools.
-If you still see:
+Store raw editor HTML
 
-<span>1.</span>
-<span><p>fsdfdfds</p></span>
+Example:
 
-then normalization is not applied correctly.
+this.editorHtml
 
-You should end up with:
+Use it in 2 ways
 
-<span>1.</span>
-<span>fsdfdfds</span>
+For preview
 
+this.previewHtml = this.buildPreviewHtml(this.editorHtml);
+
+For DOCX API
+
+const docxHtml = this.buildDocxHtml(this.editorHtml);
 
 ⸻
 
-Paste these 3 updated methods together and it should fix the line-break issue.
+Why PDF works but DOCX fails
+
+Because PDF renderer is browser-like and understands:
+
+* flex
+* span-based layout
+* custom visual numbering
+
+DOCX renderer usually prefers:
+
+* semantic lists
+* minimal CSS
+* native <ol>/<li> structure
+
+⸻
+
+Final answer
+
+Your DOCX API is failing because you are sending preview HTML, not DOCX-friendly HTML.
+
+Fix:
+
+* keep decorateOrderedLists() only for preview/PDF
+* do not use it for DOCX
+* send clean nested <ol><li> HTML with only start and type
+
+If you want, I can now give you one final copy-paste implementation with:
+
+* buildPreviewHtml()
+* buildDocxHtml()
+* prepareOrderedListsForDocx()
+* exact place where to call the DOCX method before sending API request.
