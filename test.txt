@@ -1,86 +1,61 @@
-That confirms it: your PDF renderer supports your custom HTML layout, but the DOCX API does not.
+Because you must use the same HTML for both PDF and DOCX, the safest fix is:
 
-So the issue is not your numbering logic anymore.
-The issue is:
+Stop using both of these
 
-* for preview/PDF, you are sending decorated HTML
-* for DOCX, the external API is interpreting <ol><li> differently and also rendering your custom marker text
-* result: native list bullet/number + your manual number text together
+* native <ol><li> markers
+* CSS layout hacks like table, table-cell, flex
 
-That is why Word shows:
+Use one portable format for both
 
-* a dot on left
-* then 1., 3.1., 3.1.2. as text
-* then content below
+Convert ordered lists into plain paragraphs with marker text inside the content.
+
+That avoids:
+
+* DOCX adding its own bullets/numbers
+* PDF and DOCX rendering differently
+* unsupported CSS layout issues
+
+⸻
+
+Best single-format approach
+
+Generate HTML like this:
+
+<p style="margin:0 0 8px 0; padding-left:32px; text-indent:-32px;">
+  <span style="font-weight:700;">1.</span> First item
+</p>
+<p style="margin:0 0 8px 32px; padding-left:40px; text-indent:-40px;">
+  <span style="font-weight:700;">1.1.</span> Nested item
+</p>
+
+This works much better across:
+
+* browser preview
+* PDF renderers
+* DOCX HTML importers
+
+It is an old-school hanging-indent format, and DOCX engines usually handle it much better than flex or table.
 
 ⸻
 
 What you should do
 
-Do not send decorated HTML to DOCX API
+Instead of decorating <li> visually but keeping <ol>/<li>, you should replace ordered lists with paragraph blocks.
 
-Your current decorated HTML is something like:
+That means:
 
-<ol>
-  <li>
-    <div style="display:flex">
-      <span>3.1.</span>
-      <span>text</span>
-    </div>
-  </li>
-</ol>
-
-For DOCX generation, this is bad because:
-
-* <li> still has its own native marker
-* your <span>3.1.</span> is another marker
-* DOCX engine does not handle CSS/flex the same way as browser/PDF
+* no native list bullets
+* no double numbering
+* no flex/table
+* same HTML for PDF and DOCX
 
 ⸻
 
-Correct approach
+Copy-paste solution
 
-Use two separate HTML outputs:
+1. Replace your preview builder with a portable builder
 
-1. For preview / PDF
-
-Keep your current:
-
-this.decorateOrderedLists(root);
-
-2. For DOCX export
-
-Do not call decorateOrderedLists(root)
-
-Instead send only clean semantic HTML like:
-
-<ol start="1" type="1">
-  <li>fdsfsd</li>
-  <li>
-    fsdfds
-    <ol start="1" type="1">
-      <li>dsf</li>
-      <li>
-        dsf
-        <ol start="1" type="1">
-          <li>...</li>
-        </ol>
-      </li>
-    </ol>
-  </li>
-</ol>
-
-This is what DOCX engines understand best.
-
-⸻
-
-Exact fix in your code
-
-Your current preview method
-
-Keep this for browser preview:
-
-private buildPreviewHtml(content: string): string {
+private buildPortableHtml(content: string): string {
   const root = document.createElement('div');
   root.innerHTML = content;
   root.style.fontFamily = 'Georgia, serif';
@@ -88,165 +63,200 @@ private buildPreviewHtml(content: string): string {
   root.style.lineHeight = '1.6';
   root.style.color = '#1f2a37';
   this.applyElementStyles(root);
-  this.decorateOrderedLists(root);
+  this.transformOrderedListsToPortableBlocks(root);
   return root.innerHTML;
+}
+
+Use this same method for:
+
+* PDF HTML
+* DOCX HTML
+* preview HTML
+
+⸻
+
+2. Add this main transformer
+
+private transformOrderedListsToPortableBlocks(root: HTMLElement): void {
+  const topLevelLists = Array.from(root.querySelectorAll('ol')).filter(
+    (list) => !list.parentElement?.closest('ol')
+  ) as HTMLOListElement[];
+  for (const list of topLevelLists) {
+    const fragment = document.createDocumentFragment();
+    this.appendPortableOrderedList(list, [], fragment);
+    list.replaceWith(fragment);
+  }
 }
 
 ⸻
 
-Add a separate DOCX method
+3. Add recursive ordered-list converter
 
-private buildDocxHtml(content: string): string {
-  const root = document.createElement('div');
-  root.innerHTML = content;
-  root.style.fontFamily = 'Georgia, serif';
-  root.style.fontSize = '16px';
-  root.style.lineHeight = '1.6';
-  root.style.color = '#1f2a37';
-  this.applyElementStyles(root);
-  this.prepareOrderedListsForDocx(root);
-  return root.innerHTML;
-}
-
-⸻
-
-Add this method
-
-private prepareOrderedListsForDocx(root: HTMLElement): void {
-  const orderedLists = Array.from(root.querySelectorAll('ol'));
-  for (const list of orderedLists) {
-    const ol = list as HTMLOListElement;
-    const start = parseInt(ol.getAttribute('start') || '1', 10);
-    ol.setAttribute('start', String(start));
-    const listStyle = this.getOrderedListStyle(ol);
-    const typeMap: Record<OrderedListStyle, string> = {
-      decimal: '1',
-      'decimal-leading-zero': '1',
-      'lower-alpha': 'a',
-      'upper-alpha': 'A',
-      'lower-roman': 'i',
-      'upper-roman': 'I'
-    };
-    const type = typeMap[listStyle];
-    if (type) {
-      ol.setAttribute('type', type);
-    }
-    // keep native list behavior for DOCX engines
-    ol.style.listStyleType = listStyle;
-    ol.style.paddingLeft = '2rem';
-    ol.style.margin = '0 0 0.75rem';
-  }
-  const items = Array.from(root.querySelectorAll('li'));
-  for (const item of items) {
-    const li = item as HTMLLIElement;
-    li.style.margin = '0.25rem 0';
-    li.style.listStyle = '';
-  }
-  // make p inside li inline-friendly for doc engines
-  const paragraphsInsideLi = Array.from(root.querySelectorAll('li > p'));
-  for (const p of paragraphsInsideLi) {
-    const el = p as HTMLElement;
-    el.style.margin = '0';
-    el.style.display = 'inline';
-  }
-  // IMPORTANT: remove preview-only artifacts if they exist
-  const previewArtifacts = Array.from(
-    root.querySelectorAll('[data-list-index], [data-list-type]')
+private appendPortableOrderedList(
+  list: HTMLOListElement,
+  parentPath: Array<{ index: number; style: OrderedListStyle }>,
+  container: DocumentFragment | HTMLElement
+): void {
+  const listStyle = this.getOrderedListStyle(list);
+  const start = parseInt(list.getAttribute('start') || '1', 10);
+  const items = Array.from(list.children).filter(
+    (child): child is HTMLLIElement => child instanceof HTMLLIElement
   );
-  for (const artifact of previewArtifacts) {
-    artifact.removeAttribute('data-list-index');
-    artifact.removeAttribute('data-list-type');
-  }
+  items.forEach((item, index) => {
+    const currentIndex = start + index;
+    const currentPath = [...parentPath, { index: currentIndex, style: listStyle }];
+    const childNodes = Array.from(item.childNodes);
+    const nestedLists = childNodes.filter(
+      (node): node is HTMLOListElement =>
+        node instanceof HTMLOListElement
+    );
+    const contentNodes = this.normalizePortableContentNodes(
+      childNodes.filter((node) => !(node instanceof HTMLOListElement))
+    );
+    const paragraph = document.createElement('p');
+    const level = currentPath.length - 1;
+    const indent = 32 + level * 28; // tweak if needed
+    const hanging = 32;
+    paragraph.style.margin = `0 0 8px ${level * 28}px`;
+    paragraph.style.paddingLeft = `${hanging}px`;
+    paragraph.style.textIndent = `-${hanging}px`;
+    paragraph.style.lineHeight = '1.6';
+    paragraph.style.color = '#1f2a37';
+    const marker = document.createElement('span');
+    marker.textContent = `${this.formatMarkerPath(currentPath)}. `;
+    marker.style.fontWeight = '700';
+    marker.style.color = '#1f2a37';
+    paragraph.appendChild(marker);
+    if (contentNodes.length === 0) {
+      paragraph.appendChild(document.createTextNode('\u00A0'));
+    } else {
+      for (const node of contentNodes) {
+        paragraph.appendChild(node);
+      }
+    }
+    container.appendChild(paragraph);
+    for (const nestedList of nestedLists) {
+      this.appendPortableOrderedList(nestedList, currentPath, container);
+    }
+  });
 }
 
 ⸻
 
-Very important
+4. Replace your content normalizer with this
 
-If your editor content has already been mutated by decorateOrderedLists() and saved back, then DOCX will still break.
-
-That means your saved HTML may already contain things like:
-
-<li data-list-index="1" data-list-type="1">
-  <div style="display:flex">
-    <span>1.</span>
-    <span>text</span>
-  </div>
-</li>
-
-If that is the case, then DOCX API will always render badly.
-
-So for DOCX, the HTML you send must be the original semantic HTML, not the preview-transformed HTML.
-
-⸻
-
-Rule you should follow
-
-Never save this for export:
-
-* display:flex
-* custom marker <span>1.2.3.</span>
-* data-list-index
-* data-list-type
-
-Save/send this for export:
-
-* pure <ol>
-* pure <li>
-* proper start
-* proper type
+private normalizePortableContentNodes(nodes: ChildNode[]): ChildNode[] {
+  const normalized: ChildNode[] = [];
+  for (const node of nodes) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+      if (text) {
+        normalized.push(document.createTextNode(text));
+      }
+      continue;
+    }
+    if (!(node instanceof HTMLElement)) {
+      continue;
+    }
+    const tag = node.tagName.toLowerCase();
+    // unwrap common block wrappers from TinyMCE
+    if (tag === 'p' || tag === 'div') {
+      const text = node.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+      if (text) {
+        normalized.push(document.createTextNode(text));
+      }
+      continue;
+    }
+    // keep inline tags, but remove troublesome margins
+    node.style.margin = '0';
+    node.style.display = 'inline';
+    normalized.push(node);
+  }
+  return normalized;
+}
 
 ⸻
 
-Best architecture
+5. Keep your existing marker helpers
 
-Store raw editor HTML
+Keep using:
 
-Example:
+* getOrderedListStyle(...)
+* formatMarkerPath(...)
+* formatMarkerSegment(...)
+* toAlphabetic(...)
+* toRoman(...)
 
-this.editorHtml
-
-Use it in 2 ways
-
-For preview
-
-this.previewHtml = this.buildPreviewHtml(this.editorHtml);
-
-For DOCX API
-
-const docxHtml = this.buildDocxHtml(this.editorHtml);
+Those are fine.
 
 ⸻
 
-Why PDF works but DOCX fails
+How to use it
 
-Because PDF renderer is browser-like and understands:
+Wherever you currently do:
 
-* flex
-* span-based layout
-* custom visual numbering
+const html = this.buildPreviewHtml(content);
 
-DOCX renderer usually prefers:
+change it to:
 
-* semantic lists
-* minimal CSS
-* native <ol>/<li> structure
+const html = this.buildPortableHtml(content);
+
+And send that same HTML to:
+
+* PDF generator
+* DOCX generator
 
 ⸻
 
-Final answer
+Why this fixes both
 
-Your DOCX API is failing because you are sending preview HTML, not DOCX-friendly HTML.
+Your current bad DOCX output happens because Word sees:
 
-Fix:
+* real list structure
+* plus your custom visual number
 
-* keep decorateOrderedLists() only for preview/PDF
-* do not use it for DOCX
-* send clean nested <ol><li> HTML with only start and type
+So it renders both.
 
-If you want, I can now give you one final copy-paste implementation with:
+With the new portable HTML:
 
-* buildPreviewHtml()
-* buildDocxHtml()
-* prepareOrderedListsForDocx()
-* exact place where to call the DOCX method before sending API request.
+* there is no <ol> or <li> left after transformation
+* number is plain text inside paragraph
+* indentation is simple paragraph CSS
+* DOCX and PDF both read the same thing
+
+⸻
+
+Tradeoff
+
+This is the honest tradeoff:
+
+* You gain consistent output in both PDF and DOCX
+* You lose native editable Word list semantics
+
+But since your external DOCX API is not reliably supporting your current list HTML, this is the most stable single-HTML solution.
+
+⸻
+
+One important note
+
+Do not call your old decorateOrderedLists(root) anymore for export content, because that creates layout-specific HTML.
+
+Use only:
+
+this.transformOrderedListsToPortableBlocks(root);
+
+⸻
+
+Final recommendation
+
+For your case, the most reliable shared pipeline is:
+
+const finalHtml = this.buildPortableHtml(editorHtml);
+
+Use that same finalHtml for:
+
+* preview
+* PDF
+* DOCX
+
+If you want, I can give you one merged final copy-paste block with all methods together in the exact order for your Angular component.
