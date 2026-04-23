@@ -1,0 +1,217 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  color: #f5f5f4;
+}
+
+.workspace {
+  min-height: 100vh;
+  padding: 48px 24px 64px;
+  background:
+    radial-gradient(circle at top left, rgba(245, 158, 11, 0.22), transparent 28%),
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.18), transparent 24%),
+    linear-gradient(180deg, #18181b 0%, #0f172a 100%);
+}
+
+.hero {
+  width: min(1180px, 100%);
+  margin: 0 auto 28px;
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  color: #fbbf24;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  margin: 0 0 14px;
+  max-width: 16ch;
+  color: #fafaf9;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.3rem, 5vw, 4.6rem);
+  font-weight: 700;
+  line-height: 0.95;
+}
+
+.intro {
+  max-width: 72ch;
+  margin: 0;
+  color: #d6d3d1;
+  font-size: 1.02rem;
+  line-height: 1.7;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+
+button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.85rem 1.2rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+.primary {
+  color: #111827;
+  background: linear-gradient(135deg, #fbbf24 0%, #fb923c 100%);
+}
+
+.secondary {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.status {
+  color: #cbd5e1;
+  font-size: 0.95rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+
+.panel {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 28px;
+  background: rgba(15, 23, 42, 0.8);
+  box-shadow: 0 24px 90px rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+.panel-header {
+  padding: 22px 24px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.panel-header h2 {
+  margin: 0 0 6px;
+  color: #fafaf9;
+  font-size: 1.05rem;
+}
+
+.panel-header p {
+  margin: 0;
+  color: #cbd5e1;
+  line-height: 1.55;
+}
+
+.panel-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.editor-panel {
+  padding-bottom: 18px;
+}
+
+.editor-host {
+  visibility: hidden;
+}
+
+.preview-panel,
+.export-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.patch-panel {
+  grid-column: 1 / -1;
+}
+
+.preview-frame {
+  width: 100%;
+  min-height: 420px;
+  border: 0;
+  background: #ffffff;
+}
+
+.patch-input {
+  width: 100%;
+  min-height: 320px;
+  padding: 20px 24px 24px;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  outline: none;
+  resize: vertical;
+  color: #f8fafc;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 0.96));
+  font: inherit;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  box-sizing: border-box;
+}
+
+.patch-input::placeholder {
+  color: rgba(226, 232, 240, 0.55);
+}
+
+.code-view {
+  margin: 0;
+  padding: 20px 24px 24px;
+  color: #dbeafe;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.35), rgba(15, 23, 42, 0.85));
+  font-size: 0.88rem;
+  line-height: 1.6;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  flex: 1;
+}
+
+code {
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.4rem;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 960px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .workspace {
+    padding-inline: 16px;
+    padding-top: 32px;
+  }
+
+  .hero h1 {
+    max-width: 12ch;
+  }
+
+  .actions {
+    align-items: stretch;
+  }
+
+  button {
+    width: 100%;
+  }
+}

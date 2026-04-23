@@ -1,0 +1,87 @@
+<main class="workspace">
+  <section class="hero">
+    <p class="eyebrow">TinyMCE + Export HTML</p>
+    <h1>Multi-level ordered list editor for DOCX and PDF preview</h1>
+    <p class="intro">
+      TinyMCE keeps the source HTML semantic with nested <code>ol</code> and
+      <code>li</code> elements. Preview and export are generated from that source so the
+      numbering stays identical in the editor, iframe preview, and backend document flow.
+    </p>
+
+    <div class="actions">
+      <button type="button" class="primary" (click)="resetSample()">Reset sample</button>
+      <button type="button" class="secondary" (click)="copyExportHtml()">
+        {{ copyLabel() }}
+      </button>
+      <span class="status">{{ status() }}</span>
+    </div>
+  </section>
+
+  <section class="grid">
+    <article class="panel editor-panel">
+      <div class="panel-header">
+        <h2>Editor</h2>
+        <p>Tab and Shift+Tab indent and outdent real nested list items.</p>
+      </div>
+
+      <textarea #editorHost class="editor-host"></textarea>
+    </article>
+
+    <article class="panel preview-panel">
+      <div class="panel-header">
+        <h2>Iframe Preview</h2>
+        <p>Rendered from semantic HTML using explicit hierarchical numbering.</p>
+      </div>
+
+      <iframe
+        class="preview-frame"
+        title="Document preview"
+        [srcdoc]="previewFrameHtml()"
+      ></iframe>
+    </article>
+
+    <article class="panel export-panel">
+      <div class="panel-header">
+        <h2>Preview Body HTML</h2>
+        <p>Send only this body content to your preview or DOCX/PDF backend API.</p>
+
+        <div class="panel-actions">
+          <button type="button" class="secondary" (click)="loadPreviewBodyIntoEditor()">
+            Load into TinyMCE
+          </button>
+        </div>
+      </div>
+
+      <pre class="code-view">{{ exportHtml() }}</pre>
+    </article>
+
+    <article class="panel export-panel patch-panel">
+      <div class="panel-header">
+        <h2>Patch Value</h2>
+        <p>Paste any Preview Body HTML here and patch it into TinyMCE edit mode.</p>
+
+        <div class="panel-actions">
+          <button type="button" class="secondary" (click)="patchValueIntoEditor()">
+            Patch to TinyMCE
+          </button>
+        </div>
+      </div>
+
+      <textarea
+        class="patch-input"
+        placeholder="Paste Preview Body HTML here, then click Patch to TinyMCE"
+        [value]="patchValue()"
+        (input)="updatePatchValue($any($event.target).value)"
+      ></textarea>
+    </article>
+
+    <article class="panel export-panel">
+      <div class="panel-header">
+        <h2>Saved Semantic HTML</h2>
+        <p>This is the canonical TinyMCE content to persist in your database.</p>
+      </div>
+
+      <pre class="code-view">{{ rawHtml() }}</pre>
+    </article>
+  </section>
+</main>
