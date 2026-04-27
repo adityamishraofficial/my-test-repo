@@ -1,75 +1,67 @@
-Your editor is still loading rendered preview HTML like this:
 
-<div>...</div><p><span>Not adding...</span></p>
+Replace these 3 methods.
 
-That is why Enter does not create a new list index. TinyMCE only continues numbering when cursor is inside real:
-
-<ol><li>...</li></ol>
-
-Fix rule
-
-Use 2 separate HTML values:
-
-editorHtml   = real ol/li HTML only
-previewHtml  = rendered div/span numbering HTML only
-
-Do not put previewHtml back into TinyMCE.
-
-⸻
-
-Save from TinyMCE
-
-saveTemplate() {
-  const editorHtml = this.editor.getContent();
-  const cleanEditorHtml = this.cleanEditorHtmlForSave(editorHtml);
-  // save this only
-  this.payload.html = cleanEditorHtml;
+private normalizeEditorContent(content: string): string {
+  const container = document.createElement('div');
+  container.innerHTML = content;
+  // TinyMCE save/re-render must keep real ol/li structure.
+  // Remove rendered-preview HTML only if it accidentally exists.
+  container
+    .querySelectorAll('[data-rendered-preview="true"], [data-rendered-list="true"]')
+    .forEach((node) => node.remove());
+  return container.innerHTML;
 }
-private cleanEditorHtmlForSave(html: string): string {
-  const div = document.createElement('div');
-  div.innerHTML = html;
-  // remove preview/rendered html if accidentally present
-  div.querySelectorAll('[data-rendered-preview="true"], [data-rendered-list="true"]').forEach((el) => {
-    el.remove();
+private stripRenderedAttributes(root: ParentNode): void {
+  root
+    .querySelectorAll(
+      '[data-rendered-preview], [data-rendered-list], [data-rendered-item], [data-rendered-row], [data-rendered-marker], [data-rendered-content]'
+    )
+    .forEach((node) => {
+      node.removeAttribute('data-rendered-preview');
+      node.removeAttribute('data-rendered-list');
+      node.removeAttribute('data-rendered-item');
+      node.removeAttribute('data-rendered-row');
+      node.removeAttribute('data-rendered-marker');
+      node.removeAttribute('data-rendered-content');
+    });
+  // Do NOT remove style globally.
+}
+private buildSemanticListFromRendered(renderedList: Element): HTMLOListElement {
+  const ol = document.createElement('ol');
+  const renderedItems = Array.from(renderedList.children).filter(
+    (child): child is HTMLElement =>
+      child instanceof HTMLElement &&
+      child.getAttribute('data-rendered-item') === 'true'
+  );
+  renderedItems.forEach((renderedItem) => {
+    const li = document.createElement('li');
+    const contentWrapper = renderedItem.querySelector(
+      ':scope > [data-rendered-row="true"] [data-rendered-content="true"]'
+    );
+    if (contentWrapper) {
+      Array.from(contentWrapper.childNodes).forEach((node) => {
+        if (
+          node instanceof HTMLElement &&
+          node.getAttribute('data-rendered-list') === 'true'
+        ) {
+          return;
+        }
+        li.appendChild(node.cloneNode(true));
+      });
+    }
+    const nestedRenderedLists = Array.from(
+      renderedItem.querySelectorAll(':scope > [data-rendered-list="true"]')
+    );
+    nestedRenderedLists.forEach((nestedList) => {
+      li.appendChild(this.buildSemanticListFromRendered(nestedList));
+    });
+    ol.appendChild(li);
   });
-  return div.innerHTML;
+  return ol;
 }
 
-⸻
+And remove/comment this call inside normalizeEditorContent:
 
-Load back into TinyMCE
+this.convertRenderedPreviewToSemantic(normalizedRoot);
 
-this.editor.setContent(savedHtml); // savedHtml must be real <ol><li>
-
-Example saved HTML should be:
-
-<ol>
-  <li>fsdfsd
-    <ol>
-      <li>fdsffds</li>
-      <li>fdfsfd
-        <ol>
-          <li>fdsffdsf</li>
-        </ol>
-      </li>
-    </ol>
-  </li>
-</ol>
-
-Then pressing Enter after fdsffdsf will create the next index automatically.
-
-⸻
-
-Preview/PDF only
-
-openPreview() {
-  const savedHtml = this.editor.getContent();
-  const previewHtml = this.buildRenderedPreview(savedHtml);
-  this.previewBody = previewHtml;
-}
-
-Never do this:
-
-this.editor.setContent(previewHtml); // wrong
-
-Your current issue is happening because rendered preview HTML is being inserted inside TinyMCE, so TinyMCE sees normal div/p/span, not list items.
+TinyMCE must receive only normal <ol><li> HTML. Preview/PDF can use rendered <div> HTML separately.
