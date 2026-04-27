@@ -1,7 +1,84 @@
-<div data-rendered-preview="true" style="padding:32px;color:#1f2937;background:#ffffff;font-family:Georgia,'Times New Roman',serif;font-size:12pt;line-height:1.6"><div data-rendered-list="true" style="margin:0 0 14px"><div data-rendered-item="true" style="display:block;margin:0"><p data-rendered-row="true" style="margin-top:0;margin-right:0;margin-bottom:8pt;margin-left:0;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0;color:#1f2937;line-height:1.6;margin-left:0pt;padding-left:0pt"><strong data-rendered-marker="true" style="font-weight:700;color:#111827">1.</strong> <span data-rendered-content="true" style="color:#1f2937">sfdfsd</span></p></div><div data-rendered-item="true" style="display:block;margin:0"><p data-rendered-row="true" style="margin-top:0;margin-right:0;margin-bottom:8pt;margin-left:0;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0;color:#1f2937;line-height:1.6;margin-left:0pt;padding-left:0pt"><strong data-rendered-marker="true" style="font-weight:700;color:#111827">2.</strong> <span data-rendered-content="true" style="color:#1f2937">fsdfbkjfsd
 
-</span></p><div data-rendered-list="true" style="margin:0 0 14px"><div data-rendered-item="true" style="display:block;margin:0"><p data-rendered-row="true" style="margin-top:0;margin-right:0;margin-bottom:8pt;margin-left:0;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0;color:#1f2937;line-height:1.6;margin-left:28pt;padding-left:28pt">  <strong data-rendered-marker="true" style="font-weight:700;color:#111827">2.1.</strong> <span data-rendered-content="true" style="color:#1f2937">fsdfdsbk
 
-</span></p><div data-rendered-list="true" style="margin:0 0 14px"><div data-rendered-item="true" style="display:block;margin:0"><p data-rendered-row="true" style="margin-top:0;margin-right:0;margin-bottom:8pt;margin-left:0;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0;color:#1f2937;line-height:1.6;margin-left:56pt;padding-left:56pt">    <strong data-rendered-marker="true" style="font-weight:700;color:#111827">2.1.1.</strong> <span data-rendered-content="true" style="color:#1f2937">fsdbkj</span></p></div><div data-rendered-item="true" style="display:block;margin:0"><p data-rendered-row="true" style="margin-top:0;margin-right:0;margin-bottom:8pt;margin-left:0;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0;color:#1f2937;line-height:1.6;margin-left:56pt;padding-left:56pt">    <strong data-rendered-marker="true" style="font-weight:700;color:#111827">2.1.2.</strong> <span data-rendered-content="true" style="color:#1f2937">fdsfd</span></p></div></div></div><div data-rendered-item="true" style="display:block;margin:0"><p data-rendered-row="true" style="margin-top:0;margin-right:0;margin-bottom:8pt;margin-left:0;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0;color:#1f2937;line-height:1.6;margin-left:28pt;padding-left:28pt">  <strong data-rendered-marker="true" style="font-weight:700;color:#111827">2.2.</strong> <span data-rendered-content="true" style="color:#1f2937">fdsfjbk</span></p></div></div></div><div data-rendered-item="true" style="display:block;margin:0"><p data-rendered-row="true" style="margin-top:0;margin-right:0;margin-bottom:8pt;margin-left:0;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0;color:#1f2937;line-height:1.6;margin-left:0pt;padding-left:0pt"><strong data-rendered-marker="true" style="font-weight:700;color:#111827">3.</strong> <span data-rendered-content="true" style="color:#1f2937">fdsfkjbk
+Your issue is here:
 
-</span></p><div data-rendered-list="true" style="margin:0 0 14px"><div data-rendered-item="true" style="display:block;margin:0"><p data-rendered-row="true" style="margin-top:0;margin-right:0;margin-bottom:8pt;margin-left:0;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0;color:#1f2937;line-height:1.6;margin-left:28pt;padding-left:28pt">  <strong data-rendered-marker="true" style="font-weight:700;color:#111827">3.1.</strong> <span data-rendered-content="true" style="color:#1f2937">,bfsdljb</span></p></div><div data-rendered-item="true" style="display:block;margin:0"><p data-rendered-row="true" style="margin-top:0;margin-right:0;margin-bottom:8pt;margin-left:0;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0;color:#1f2937;line-height:1.6;margin-left:28pt;padding-left:28pt">  <strong data-rendered-marker="true" style="font-weight:700;color:#111827">3.2.</strong> <span data-rendered-content="true" style="color:#1f2937">f</span></p></div></div></div></div></div>
+root.querySelectorAll('[style]').forEach((node) => {
+  node.removeAttribute('style');
+});
+
+This removes styles from table, td, th, p, span, etc.
+Also your buildSemanticListFromRendered() only copies some child nodes and skips rendered list nodes, so some content can disappear.
+
+Use this safer version: it converts only your custom rendered-list divs back to <ol><li>, but keeps table/paragraph/span/image content.
+
+private normalizeEditorContent(content: string): string {
+  const container = document.createElement('div');
+  container.innerHTML = content;
+  // Convert only rendered preview lists back to real ol/li
+  this.convertRenderedPreviewToSemantic(container);
+  // Remove only custom data attributes, do NOT remove style globally
+  this.stripRenderedAttributes(container);
+  return container.innerHTML;
+}
+private convertRenderedPreviewToSemantic(root: ParentNode): void {
+  const renderedLists = Array.from(
+    root.querySelectorAll('div[data-rendered-list="true"]')
+  ) as HTMLElement[];
+  renderedLists.forEach((renderedList) => {
+    // Only convert top-level rendered list, nested lists handled recursively
+    if (renderedList.closest('div[data-rendered-item="true"] div[data-rendered-list="true"]') !== renderedList) {
+      return;
+    }
+    const semanticList = this.buildSemanticListFromRendered(renderedList);
+    renderedList.replaceWith(semanticList);
+  });
+}
+private buildSemanticListFromRendered(renderedList: HTMLElement): HTMLOListElement {
+  const ol = document.createElement('ol');
+  Array.from(renderedList.children).forEach((child) => {
+    if (!(child instanceof HTMLElement)) return;
+    if (child.dataset['renderedItem'] !== 'true') return;
+    const li = document.createElement('li');
+    const contentWrapper = child.querySelector(
+      ':scope > [data-rendered-row="true"] [data-rendered-content="true"]'
+    );
+    if (contentWrapper) {
+      Array.from(contentWrapper.childNodes).forEach((node) => {
+        li.appendChild(node.cloneNode(true));
+      });
+    }
+    const nestedLists = Array.from(
+      child.querySelectorAll(':scope > div[data-rendered-list="true"]')
+    ) as HTMLElement[];
+    nestedLists.forEach((nestedList) => {
+      li.appendChild(this.buildSemanticListFromRendered(nestedList));
+    });
+    ol.appendChild(li);
+  });
+  return ol;
+}
+private stripRenderedAttributes(root: ParentNode): void {
+  root
+    .querySelectorAll(
+      '[data-rendered-preview], [data-rendered-list], [data-rendered-item], [data-rendered-row], [data-rendered-marker], [data-rendered-content]'
+    )
+    .forEach((node) => {
+      node.removeAttribute('data-rendered-preview');
+      node.removeAttribute('data-rendered-list');
+      node.removeAttribute('data-rendered-item');
+      node.removeAttribute('data-rendered-row');
+      node.removeAttribute('data-rendered-marker');
+      node.removeAttribute('data-rendered-content');
+    });
+  // DO NOT remove style from all elements
+  // Otherwise table width, td borders, text alignment etc. will be lost
+}
+
+Also keep this in TinyMCE config:
+
+valid_elements: '*[*]',
+extended_valid_elements:
+  'table[*],thead[*],tbody[*],tr[*],td[*],th[*],colgroup[*],col[*],img[*],span[*],div[*],p[*],ol[*],ul[*],li[*],button[onclick|class|style|id|type]',
+valid_children: '+body[style],+body[table],+li[ol|ul|table|p|div|span]',
+
+Main fix: never remove style globally and only replace your custom rendered list wrapper, not the whole payload.
