@@ -1,36 +1,75 @@
-private normalizeEditorContent(content: string): string {
-  const container = document.createElement('div');
-  container.innerHTML = content;
+Your editor is still loading rendered preview HTML like this:
 
-  // Important:
-  // Only remove rendered preview wrappers if they exist.
-  // Do NOT rebuild ol/li from rendered divs.
-  this.unwrapRenderedPreview(container);
+<div>...</div><p><span>Not adding...</span></p>
 
-  return container.innerHTML;
+That is why Enter does not create a new list index. TinyMCE only continues numbering when cursor is inside real:
+
+<ol><li>...</li></ol>
+
+Fix rule
+
+Use 2 separate HTML values:
+
+editorHtml   = real ol/li HTML only
+previewHtml  = rendered div/span numbering HTML only
+
+Do not put previewHtml back into TinyMCE.
+
+⸻
+
+Save from TinyMCE
+
+saveTemplate() {
+  const editorHtml = this.editor.getContent();
+  const cleanEditorHtml = this.cleanEditorHtmlForSave(editorHtml);
+  // save this only
+  this.payload.html = cleanEditorHtml;
+}
+private cleanEditorHtmlForSave(html: string): string {
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  // remove preview/rendered html if accidentally present
+  div.querySelectorAll('[data-rendered-preview="true"], [data-rendered-list="true"]').forEach((el) => {
+    el.remove();
+  });
+  return div.innerHTML;
 }
 
-private unwrapRenderedPreview(root: HTMLElement): void {
-  const renderedPreview = root.querySelector('[data-rendered-preview="true"]');
+⸻
 
-  if (!renderedPreview) {
-    return;
-  }
+Load back into TinyMCE
 
-  // If original semantic HTML is stored, restore it
-  const originalHtml = renderedPreview.getAttribute('data-original-html');
+this.editor.setContent(savedHtml); // savedHtml must be real <ol><li>
 
-  if (originalHtml) {
-    renderedPreview.replaceWith(...this.htmlToNodes(originalHtml));
-    return;
-  }
+Example saved HTML should be:
 
-  // fallback: remove only wrapper, keep children
-  renderedPreview.replaceWith(...Array.from(renderedPreview.childNodes));
+<ol>
+  <li>fsdfsd
+    <ol>
+      <li>fdsffds</li>
+      <li>fdfsfd
+        <ol>
+          <li>fdsffdsf</li>
+        </ol>
+      </li>
+    </ol>
+  </li>
+</ol>
+
+Then pressing Enter after fdsffdsf will create the next index automatically.
+
+⸻
+
+Preview/PDF only
+
+openPreview() {
+  const savedHtml = this.editor.getContent();
+  const previewHtml = this.buildRenderedPreview(savedHtml);
+  this.previewBody = previewHtml;
 }
 
-private htmlToNodes(html: string): Node[] {
-  const template = document.createElement('template');
-  template.innerHTML = html;
-  return Array.from(template.content.childNodes);
-}
+Never do this:
+
+this.editor.setContent(previewHtml); // wrong
+
+Your current issue is happening because rendered preview HTML is being inserted inside TinyMCE, so TinyMCE sees normal div/p/span, not list items.
