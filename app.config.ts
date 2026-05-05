@@ -10,3 +10,7 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes)
   ]
 };
+\b(p-)(m[trblxy]?|p[trblxy]?|d|flex|grid)-
+
+  $2-$2-
+  
