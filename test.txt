@@ -12,6 +12,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 
 type TinyMceEditor = {
   execCommand: (command: string) => void;
+  getBody: () => HTMLElement;
   getContent: (options?: { format?: string }) => string;
   remove: () => void;
   selection: {
@@ -106,11 +107,14 @@ const CONTENT_STYLE = ['color:#1f2937'].join(';');
 const PREVIEW_DATA_ATTRIBUTES = [
   'data-rendered-preview',
   'data-rendered-list',
+  'data-rendered-list-kind',
+  'data-rendered-list-format',
   'data-rendered-item',
   'data-rendered-row',
   'data-rendered-marker',
   'data-rendered-content',
 ];
+const EDITOR_MARKER_ATTRIBUTE = 'data-editor-marker';
 
 const EDITOR_CONTENT_STYLE = `
   body {
@@ -136,23 +140,34 @@ const EDITOR_CONTENT_STYLE = `
     margin: 0 0 14px;
     padding-left: 0;
     list-style: none;
-    counter-reset: item;
   }
 
-  ol:not([data-rendered-list="true"]) ol:not([data-rendered-list="true"]) {
+  ul:not([data-rendered-list="true"]) {
+    margin: 0 0 14px;
+    padding-left: 42px;
+    list-style-position: outside;
+  }
+
+  ol:not([data-rendered-list="true"]) ol:not([data-rendered-list="true"]),
+  ol:not([data-rendered-list="true"]) ul:not([data-rendered-list="true"]),
+  ul:not([data-rendered-list="true"]) ol:not([data-rendered-list="true"]),
+  ul:not([data-rendered-list="true"]) ul:not([data-rendered-list="true"]) {
     margin-top: 10px;
     margin-bottom: 0;
-    margin-left: 42px;
   }
 
-  li:not([data-rendered-item="true"]) {
+  ol:not([data-rendered-list="true"]) > li:not([data-rendered-item="true"]) {
     position: relative;
     display: block;
     margin: 0 0 10px;
     padding-left: 88px;
   }
 
-  li:not([data-rendered-item="true"])::before {
+  ul:not([data-rendered-list="true"]) > li:not([data-rendered-item="true"]) {
+    margin: 0 0 10px;
+  }
+
+  ol:not([data-rendered-list="true"]) > li:not([data-rendered-item="true"])::before {
     position: absolute;
     left: 0;
     top: 0;
@@ -160,8 +175,7 @@ const EDITOR_CONTENT_STYLE = `
     text-align: right;
     font-weight: 700;
     color: #111827;
-    counter-increment: item;
-    content: counters(item, ".") ".";
+    content: attr(data-editor-marker);
   }
 
   [data-rendered-preview="true"] {
@@ -281,6 +295,7 @@ export class App implements AfterViewInit {
       setup: (activeEditor: TinyMceEditorWithEvents) => {
         activeEditor.on('init', () => {
           activeEditor.setContent(SAMPLE_DOCUMENT);
+          this.updateEditorMarkers(activeEditor);
           this.syncDerivedHtml(SAMPLE_DOCUMENT);
           this.status.set('Editor ready');
         });
@@ -307,7 +322,8 @@ export class App implements AfterViewInit {
         });
 
         activeEditor.on('change input undo redo setcontent', () => {
-          this.syncDerivedHtml(activeEditor.getContent());
+          this.updateEditorMarkers(activeEditor);
+          this.syncDerivedHtml(this.sanitizeEditorContent(activeEditor.getContent()));
         });
       },
     });
@@ -336,6 +352,15 @@ export class App implements AfterViewInit {
     this.previewHtml.set(previewBody);
     this.previewFrameHtml.set(this.trustPreviewFrameHtml(previewBody));
     this.exportHtml.set(previewBody);
+  }
+
+  private sanitizeEditorContent(content: string): string {
+    const container = document.createElement('div');
+    container.innerHTML = content;
+    container.querySelectorAll(`[${EDITOR_MARKER_ATTRIBUTE}]`).forEach((node) => {
+      node.removeAttribute(EDITOR_MARKER_ATTRIBUTE);
+    });
+    return container.innerHTML;
   }
 
   private normalizeEditorContent(content: string): string {
@@ -395,8 +420,16 @@ export class App implements AfterViewInit {
       (list): list is HTMLOListElement => !list.parentElement?.closest('li'),
     );
 
+    const topLevelUnorderedLists = Array.from(documentFragment.querySelectorAll('ul')).filter(
+      (list): list is HTMLUListElement => !list.parentElement?.closest('li'),
+    );
+
     topLevelLists.forEach((list) => {
-      list.replaceWith(this.buildRenderedList(list, []));
+      list.replaceWith(this.buildRenderedList(list, [], 0));
+    });
+
+    topLevelUnorderedLists.forEach((list) => {
+      list.replaceWith(this.buildRenderedList(list, [], 0));
     });
 
     return documentFragment.innerHTML;
@@ -452,9 +485,17 @@ export class App implements AfterViewInit {
     });
   }
 
-  private buildRenderedList(list: HTMLOListElement, parentNumbers: number[]): HTMLDivElement {
+  private buildRenderedList(
+    list: HTMLOListElement | HTMLUListElement,
+    parentOrderedMarkerSegments: string[],
+    depth: number,
+  ): HTMLDivElement {
     const renderedList = document.createElement('div');
+    const listKind = this.getListKind(list);
+    const listFormat = this.getListFormat(list);
     renderedList.setAttribute('data-rendered-list', 'true');
+    renderedList.setAttribute('data-rendered-list-kind', listKind);
+    renderedList.setAttribute('data-rendered-list-format', listFormat);
     renderedList.setAttribute('style', RENDERED_LIST_STYLE);
 
     const start = Number.parseInt(list.getAttribute('start') ?? '1', 10);
@@ -464,10 +505,20 @@ export class App implements AfterViewInit {
 
     items.forEach((item, itemIndex) => {
       const currentNumber = Number.isNaN(start) ? itemIndex + 1 : start + itemIndex;
-      const currentPath = [...parentNumbers, currentNumber];
-      const depth = currentPath.length - 1;
+      const currentOrderedMarkerSegments =
+        listKind === 'ol'
+          ? [
+              ...parentOrderedMarkerSegments,
+              this.formatListValue(currentNumber, listFormat),
+            ]
+          : parentOrderedMarkerSegments;
+      const markerText =
+        listKind === 'ol'
+          ? `${currentOrderedMarkerSegments.join('.')}.`
+          : this.formatUnorderedMarker(listFormat);
       const nestedLists = Array.from(item.children).filter(
-        (child): child is HTMLOListElement => child.tagName === 'OL',
+        (child): child is HTMLOListElement | HTMLUListElement =>
+          child.tagName === 'OL' || child.tagName === 'UL',
       );
 
       nestedLists.forEach((nestedList) => nestedList.remove());
@@ -491,7 +542,7 @@ export class App implements AfterViewInit {
       const marker = document.createElement('strong');
       marker.setAttribute('data-rendered-marker', 'true');
       marker.setAttribute('style', MARKER_STYLE);
-      marker.textContent = `${currentPath.join('.')}.`;
+      marker.textContent = markerText;
 
       const spacer = document.createTextNode('\u2002');
       const content = document.createElement('span');
@@ -508,7 +559,9 @@ export class App implements AfterViewInit {
       renderedItem.appendChild(row);
 
       nestedLists.forEach((nestedList) => {
-        renderedItem.appendChild(this.buildRenderedList(nestedList, currentPath));
+        renderedItem.appendChild(
+          this.buildRenderedList(nestedList, currentOrderedMarkerSegments, depth + 1),
+        );
       });
 
       renderedList.appendChild(renderedItem);
@@ -516,8 +569,22 @@ export class App implements AfterViewInit {
     return renderedList;
   }
 
-  private buildSemanticListFromRendered(renderedList: Element): HTMLOListElement {
-    const semanticList = document.createElement('ol');
+  private buildSemanticListFromRendered(
+    renderedList: Element,
+  ): HTMLOListElement | HTMLUListElement {
+    const listKind =
+      renderedList.getAttribute('data-rendered-list-kind') === 'ul' ? 'ul' : 'ol';
+    const semanticList = document.createElement(listKind) as HTMLOListElement | HTMLUListElement;
+    const listFormat = renderedList.getAttribute('data-rendered-list-format');
+
+    if (listFormat) {
+      semanticList.style.listStyleType = listFormat;
+      const htmlType = listKind === 'ol' ? this.toHtmlListType(listFormat) : null;
+
+      if (htmlType) {
+        semanticList.setAttribute('type', htmlType);
+      }
+    }
 
     const renderedItems = Array.from(renderedList.children).filter(
       (child): child is HTMLDivElement => child instanceof HTMLDivElement && child.dataset['renderedItem'] === 'true',
@@ -569,6 +636,200 @@ export class App implements AfterViewInit {
 
       return node.textContent?.trim().length || node.tagName === 'IMG' || node.tagName === 'BR';
     });
+  }
+
+  private updateEditorMarkers(editor: TinyMceEditor): void {
+    const body = editor.getBody();
+
+    body.querySelectorAll(`[${EDITOR_MARKER_ATTRIBUTE}]`).forEach((node) => {
+      node.removeAttribute(EDITOR_MARKER_ATTRIBUTE);
+    });
+
+    const topLevelLists = Array.from(body.querySelectorAll('ol, ul')).filter(
+      (list): list is HTMLOListElement | HTMLUListElement => !list.parentElement?.closest('li'),
+    );
+
+    topLevelLists.forEach((list) => {
+      this.decorateEditorListMarkers(list, []);
+    });
+  }
+
+  private decorateEditorListMarkers(
+    list: HTMLOListElement | HTMLUListElement,
+    parentOrderedMarkerSegments: string[],
+  ): void {
+    const listKind = this.getListKind(list);
+    const listFormat = this.getListFormat(list);
+    const start = Number.parseInt(list.getAttribute('start') ?? '1', 10);
+    const items = Array.from(list.children).filter(
+      (child): child is HTMLLIElement => child.tagName === 'LI',
+    );
+
+    items.forEach((item, itemIndex) => {
+      const currentNumber = Number.isNaN(start) ? itemIndex + 1 : start + itemIndex;
+      const currentOrderedMarkerSegments =
+        listKind === 'ol'
+          ? [
+              ...parentOrderedMarkerSegments,
+              this.formatListValue(currentNumber, listFormat),
+            ]
+          : parentOrderedMarkerSegments;
+
+      if (listKind === 'ol') {
+        item.setAttribute(
+          EDITOR_MARKER_ATTRIBUTE,
+          `${currentOrderedMarkerSegments.join('.')}.`,
+        );
+      }
+
+      const nestedLists = Array.from(item.children).filter(
+        (child): child is HTMLOListElement | HTMLUListElement =>
+          child.tagName === 'OL' || child.tagName === 'UL',
+      );
+
+      nestedLists.forEach((nestedList) => {
+        this.decorateEditorListMarkers(nestedList, currentOrderedMarkerSegments);
+      });
+    });
+  }
+
+  private getListKind(list: HTMLOListElement | HTMLUListElement): 'ol' | 'ul' {
+    return list.tagName === 'UL' ? 'ul' : 'ol';
+  }
+
+  private getListFormat(list: HTMLOListElement | HTMLUListElement): string {
+    const listKind = this.getListKind(list);
+    const styleType = list.style.listStyleType || list.getAttribute('data-mce-style') || '';
+    const inlineMatch = styleType.match(/list-style-type\s*:\s*([a-z-]+)/i);
+
+    if (inlineMatch?.[1]) {
+      return inlineMatch[1].toLowerCase();
+    }
+
+    const declaredStyle = list.style.listStyleType;
+    if (declaredStyle) {
+      return declaredStyle.toLowerCase();
+    }
+
+    if (listKind === 'ul') {
+      return 'disc';
+    }
+
+    const type = (list.getAttribute('type') || '').trim();
+    switch (type) {
+      case 'a':
+        return 'lower-alpha';
+      case 'A':
+        return 'upper-alpha';
+      case 'i':
+        return 'lower-roman';
+      case 'I':
+        return 'upper-roman';
+      case '1':
+      default:
+        return 'decimal';
+    }
+  }
+
+  private formatListValue(value: number, format: string): string {
+    switch (format) {
+      case 'lower-alpha':
+        return this.toAlphabetic(value).toLowerCase();
+      case 'upper-alpha':
+        return this.toAlphabetic(value).toUpperCase();
+      case 'lower-roman':
+        return this.toRoman(value).toLowerCase();
+      case 'upper-roman':
+        return this.toRoman(value).toUpperCase();
+      case 'lower-greek':
+        return this.toAlphabetic(value, [
+          'α', 'β', 'γ', 'δ', 'ε', 'ζ', 'η', 'θ', 'ι', 'κ', 'λ', 'μ',
+          'ν', 'ξ', 'ο', 'π', 'ρ', 'σ', 'τ', 'υ', 'φ', 'χ', 'ψ', 'ω',
+        ]);
+      case 'decimal':
+      default:
+        return `${value}`;
+    }
+  }
+
+  private formatUnorderedMarker(format: string): string {
+    switch (format) {
+      case 'circle':
+        return '◦';
+      case 'square':
+        return '▪';
+      case 'disc':
+      default:
+        return '•';
+    }
+  }
+
+  private toAlphabetic(value: number, alphabet = 'abcdefghijklmnopqrstuvwxyz'.split('')): string {
+    if (value <= 0) {
+      return `${value}`;
+    }
+
+    let remaining = value;
+    let result = '';
+
+    while (remaining > 0) {
+      remaining -= 1;
+      result = alphabet[remaining % alphabet.length] + result;
+      remaining = Math.floor(remaining / alphabet.length);
+    }
+
+    return result;
+  }
+
+  private toRoman(value: number): string {
+    if (value <= 0) {
+      return `${value}`;
+    }
+
+    const numerals: Array<[number, string]> = [
+      [1000, 'M'],
+      [900, 'CM'],
+      [500, 'D'],
+      [400, 'CD'],
+      [100, 'C'],
+      [90, 'XC'],
+      [50, 'L'],
+      [40, 'XL'],
+      [10, 'X'],
+      [9, 'IX'],
+      [5, 'V'],
+      [4, 'IV'],
+      [1, 'I'],
+    ];
+
+    let remaining = value;
+    let result = '';
+
+    numerals.forEach(([amount, symbol]) => {
+      while (remaining >= amount) {
+        result += symbol;
+        remaining -= amount;
+      }
+    });
+
+    return result;
+  }
+
+  private toHtmlListType(format: string): string | null {
+    switch (format) {
+      case 'lower-alpha':
+        return 'a';
+      case 'upper-alpha':
+        return 'A';
+      case 'lower-roman':
+        return 'i';
+      case 'upper-roman':
+        return 'I';
+      case 'decimal':
+        return '1';
+      default:
+        return null;
+    }
   }
 
   private async loadTinyMce(): Promise<void> {
