@@ -32,11 +32,9 @@ type TinyMceGlobal = {
   init: (options: Record<string, unknown>) => Promise<TinyMceEditor[]>;
 };
 
-declare global {
-  interface Window {
-    tinymce?: TinyMceGlobal;
-  }
-}
+type TinyMceWindow = Window & {
+  tinymce?: TinyMceGlobal;
+};
 
 const SAMPLE_DOCUMENT = `
   <h1>Multi-Level List Example</h1>
@@ -355,7 +353,7 @@ export class CreateEditTemplateComponent implements AfterViewInit {
     }
 
     const target = host.nativeElement;
-    const tinymce = window.tinymce;
+    const tinymce = this.getTinyMceGlobal();
 
     if (!tinymce) {
       throw new Error('TinyMCE did not finish loading.');
@@ -922,7 +920,7 @@ export class CreateEditTemplateComponent implements AfterViewInit {
   }
 
   private async loadTinyMce(): Promise<void> {
-    if (window.tinymce) {
+    if (this.getTinyMceGlobal()) {
       return;
     }
 
@@ -949,5 +947,9 @@ export class CreateEditTemplateComponent implements AfterViewInit {
       script.onerror = () => reject(new Error('Failed to load TinyMCE script.'));
       document.head.append(script);
     });
+  }
+
+  private getTinyMceGlobal(): TinyMceGlobal | undefined {
+    return (window as TinyMceWindow).tinymce;
   }
 }
