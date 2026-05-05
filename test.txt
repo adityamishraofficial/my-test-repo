@@ -1,21 +1,49 @@
-This is mainly due to PrimeNG v18 calendar icon rendering/style change. Your current CSS only has:
+The green triangle is coming from old/custom CSS, not from PrimeNG calendar. Some CSS is probably targeting calendar icon with :before / :after and creating triangle shape.
 
-.p-calendar {
-  display: flex;
+Add this fix in calendar.component.scss:
+
+:host ::ng-deep {
+  .ng-wings-calendar {
+    width: 100%;
+    display: flex;
+  }
+  .ng-wings-calendar .p-inputtext {
+    flex: 1;
+    width: 100%;
+    height: 38px;
+    border-radius: 4px 0 0 4px;
+  }
+  .ng-wings-calendar .p-datepicker-trigger {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    padding: 0;
+    background: $theme;
+    border: 1px solid $theme;
+    color: #fff;
+    border-radius: 0 4px 4px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .ng-wings-calendar .p-datepicker-trigger::before,
+  .ng-wings-calendar .p-datepicker-trigger::after,
+  .ng-wings-calendar .p-calendar::before,
+  .ng-wings-calendar .p-calendar::after {
+    content: none !important;
+    display: none !important;
+    border: 0 !important;
+  }
+  .ng-wings-calendar .p-datepicker-trigger .p-button-icon,
+  .ng-wings-calendar .p-datepicker-trigger .pi {
+    color: #fff;
+    font-size: 14px;
+    margin: 0;
+  }
 }
 
-But after v18, the input + icon layout needs explicit styling, and you should use iconDisplay=“button” if you want the green calendar button on the right like before.
+Also change your HTML to use button icon mode:
 
-Use this.
-
-calendar.component.html
-
-<label
-  [attr.for]="id"
-  *ngIf="label"
->
-  {{ label | translate }}
-</label>
 <p-calendar
   #calendar
   [(ngModel)]="value"
@@ -35,46 +63,14 @@ calendar.component.html
   (onBlur)="touch()"
 ></p-calendar>
 
-calendar.component.scss
+Then search globally for this kind of CSS and remove/override it:
 
-@import './../../../../styles/variables/all.scss';
-$theme: $color-green;
-:host {
-  display: block;
-  width: 100%;
-}
-:host ::ng-deep {
-  .ng-wings-calendar {
-    width: 100%;
-    display: flex;
-  }
-  .ng-wings-calendar .p-inputtext {
-    flex: 1;
-    width: 100%;
-    height: 38px;
-    border-radius: 4px 0 0 4px;
-  }
-  .ng-wings-calendar .p-datepicker-trigger {
-    width: 38px;
-    min-width: 38px;
-    height: 38px;
-    background: $theme;
-    border-color: $theme;
-    color: #fff;
-    border-radius: 0 4px 4px 0;
-  }
-  .ng-wings-calendar .p-datepicker-trigger:hover {
-    background: $theme;
-    border-color: $theme;
-  }
-  .ng-wings-calendar .p-button-icon {
-    color: #fff;
-  }
-}
+.p-calendar::before
+.p-calendar::after
+.p-datepicker-trigger::before
+.p-datepicker-trigger::after
+border-left
+border-right
+border-bottom
 
-Also confirm these are imported in your global styles.scss:
-
-@import "primeicons/primeicons.css";
-@import "primeng/resources/primeng.min.css";
-
-For PrimeNG v18 theme, make sure your theme import is also present, depending on your setup. Without the theme, PrimeNG components will look broken after migration.
+That triangle is almost certainly from one of those rules.
