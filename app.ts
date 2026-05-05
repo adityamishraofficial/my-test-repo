@@ -4,14 +4,11 @@ import {
   Component,
   DestroyRef,
   ElementRef,
-  NO_ERRORS_SCHEMA,
   inject,
   signal,
   viewChild,
 } from '@angular/core';
-import { ReactiveFormsModule, UntypedFormBuilder, UntypedFormGroup, Validators } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { RouterModule } from '@angular/router';
 
 type TinyMceEditor = {
   execCommand: (command: string) => void;
@@ -37,24 +34,36 @@ type TinyMceWindow = Window & {
 };
 
 const SAMPLE_DOCUMENT = `
-  <h1>Multi-Level List Example</h1>
-  <p>This HTML is prepared for backend DOCX and PDF preview rendering.</p>
+  <h1>Shared Multi-List Template</h1>
+  <p>This shared editor keeps semantic nested lists for editing and builds explicit Preview Body HTML for DOCX and PDF preview pipelines.</p>
   <ol>
-    <li>Project setup</li>
+    <li>Project summary</li>
     <li>
-      Requirements review
-      <ol>
-        <li>Confirm export layout for DOCX</li>
+      Review scope
+      <ol style="list-style-type: upper-alpha;">
         <li>
-          Confirm export layout for PDF
-          <ol>
-            <li>Validate hierarchy depth</li>
-            <li>Validate indentation in preview</li>
+          Legal review
+          <ol style="list-style-type: lower-roman;">
+            <li>Contract wording</li>
+            <li>Regulatory wording</li>
           </ol>
         </li>
+        <li>Operational review</li>
       </ol>
     </li>
-    <li>Backend preview payload</li>
+    <li>
+      Deliverables
+      <ul style="list-style-type: square;">
+        <li>DOCX preview payload</li>
+        <li>
+          PDF preview payload
+          <ul style="list-style-type: circle;">
+            <li>Cover page</li>
+            <li>Appendix</li>
+          </ul>
+        </li>
+      </ul>
+    </li>
   </ol>
 `;
 
@@ -100,16 +109,14 @@ const ROW_STYLE = [
   'color:#1f2937',
   'line-height:1.6',
 ].join(';');
-const MARKER_STYLE = [
-  'font-weight:700',
-  'color:#111827',
-].join(';');
+const MARKER_STYLE = ['font-weight:700', 'color:#111827'].join(';');
 const CONTENT_STYLE = ['color:#1f2937'].join(';');
 const PREVIEW_DATA_ATTRIBUTES = [
   'data-rendered-preview',
   'data-rendered-list',
   'data-rendered-list-kind',
   'data-rendered-list-format',
+  'data-rendered-list-start',
   'data-rendered-item',
   'data-rendered-row',
   'data-rendered-marker',
@@ -118,13 +125,130 @@ const PREVIEW_DATA_ATTRIBUTES = [
 const EDITOR_MARKER_ATTRIBUTE = 'data-editor-marker';
 
 const EDITOR_CONTENT_STYLE = `
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+  }
+
   body {
-    margin: 24px;
+    margin: 0;
+    padding: 20px;
     color: #1f2937;
     background: #ffffff;
     font-family: "Georgia", "Times New Roman", serif;
     font-size: 12pt;
     line-height: 1.6;
+  }
+
+  .page {
+    width: min(210mm, 100%);
+    min-height: 297mm;
+    padding: 20mm;
+    margin: auto;
+    background: #ffffff;
+    box-sizing: border-box;
+  }
+
+  .highlighted-var {
+    background-color: rgb(253, 249, 156);
+    color: #000000;
+    font-weight: 700;
+  }
+
+  .copy-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    cursor: pointer;
+    display: none;
+  }
+
+  .drag-content:hover .copy-btn {
+    display: block !important;
+  }
+
+  .iterate {
+    background: #eaa99c;
+  }
+
+  .noneditable {
+    background: #a8f3e6;
+  }
+
+  .variable {
+    font-weight: 700;
+  }
+
+  .transpose {
+    background: rgb(212, 247, 39) !important;
+  }
+
+  .header,
+  .footer {
+    position: relative;
+    border: 2px dotted gray;
+    min-height: 100px;
+    z-index: 99;
+  }
+
+  .delete-header-btn,
+  .delete-footer-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: transparent;
+    border: none;
+    color: #c00;
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    z-index: 9999;
+  }
+
+  .header:hover .delete-header-btn,
+  .footer:hover .delete-footer-btn {
+    display: inline !important;
+    -webkit-user-modify: read-only;
+  }
+
+  .header::before,
+  .footer::before {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 35px;
+    color: #ffea9a;
+    pointer-events: none;
+    z-index: -9;
+    font-weight: 700;
+    letter-spacing: 8px;
+  }
+
+  .header::before {
+    content: "HEADER";
+  }
+
+  .footer::before {
+    content: "FOOTER";
+  }
+
+  .header-placeholder,
+  .footer-placeholder {
+    display: block !important;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: rgb(225, 53, 53);
+    font-size: 48px;
+    opacity: 0.1;
+    font-weight: 700;
+    white-space: nowrap;
+    pointer-events: none;
+    -webkit-user-modify: read-only;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -203,52 +327,16 @@ const EDITOR_CONTENT_STYLE = `
 
 @Component({
   selector: 'app-create-edit-template',
-  imports: [CommonModule, ReactiveFormsModule, RouterModule],
+  imports: [CommonModule],
   templateUrl: './create-edit-template.component.html',
   styleUrl: './create-edit-template.component.css',
-  schemas: [NO_ERRORS_SCHEMA],
 })
 export class CreateEditTemplateComponent implements AfterViewInit {
   private readonly destroyRef = inject(DestroyRef);
-  private readonly fb = inject(UntypedFormBuilder);
   private readonly sanitizer = inject(DomSanitizer);
-  private readonly editorHost = viewChild<ElementRef<HTMLTextAreaElement>>('editorHost');
+  private readonly editorHost =
+    viewChild.required<ElementRef<HTMLTextAreaElement>>('editorHost');
 
-  protected readonly items = [
-    { icon: 'pi pi-home', route: '/' },
-    { label: 'Template Management', route: '/template-management' },
-    { label: 'Create' },
-  ];
-  protected readonly templateForm: UntypedFormGroup = this.fb.group({
-    id: [null],
-    name: [''],
-    organisationId: [null],
-    countryIds: [[] as number[]],
-    languageId: [null],
-    content: [SAMPLE_DOCUMENT.trim(), Validators.required],
-    status: [true],
-  });
-  protected readonly config = null;
-  protected readonly variablesGroups: unknown[] = [];
-  protected readonly clauses: Array<{
-    status?: string;
-    title?: string;
-    contentParse?: string;
-  }> = [];
-  protected readonly first = 0;
-  protected readonly rows = 10;
-  protected readonly totalRecord = 0;
-  protected readonly formDirty = false;
-  protected readonly editMode = false;
-  protected visible = false;
-  protected previewContent: SafeHtml | null = null;
-  protected showClauseDetailsDialog = false;
-  protected clauseDetails: {
-    clauseId?: number;
-    title?: string;
-    conditionExpression?: { conditions?: unknown[] };
-  } | null = null;
-  protected savedCriteria = null;
   protected readonly status = signal('Loading TinyMCE...');
   protected readonly rawHtml = signal(SAMPLE_DOCUMENT.trim());
   protected readonly previewHtml = signal(this.buildPreviewBody(SAMPLE_DOCUMENT));
@@ -262,12 +350,12 @@ export class CreateEditTemplateComponent implements AfterViewInit {
   private editor?: TinyMceEditor;
 
   async ngAfterViewInit(): Promise<void> {
-    if (this.editorHost()) {
+    try {
       await this.loadTinyMce();
       await this.initEditor();
-    } else {
-      this.syncDerivedHtml(this.templateForm.value.content ?? SAMPLE_DOCUMENT);
-      this.status.set('Shared template loaded');
+    } catch (error) {
+      console.error(error);
+      this.status.set('TinyMCE failed to load');
     }
 
     this.destroyRef.onDestroy(() => {
@@ -275,52 +363,18 @@ export class CreateEditTemplateComponent implements AfterViewInit {
     });
   }
 
-  protected get templateFormControl(): any {
-    return this.templateForm.controls;
-  }
-
-  protected onSubmit(): void {
-    this.syncDerivedHtml(this.templateForm.value.content ?? '');
-  }
-
-  protected onEditorInit(_event: unknown): void {}
-
-  protected onDragVariable(_event: unknown): void {}
-
-  protected onSearchClause(_event: Event): void {}
-
-  protected onDragClause(_event: DragEvent, _clause: unknown): void {}
-
-  protected onLoadClauses(_event?: unknown): void {}
-
-  protected onPreview(): void {
-    this.syncDerivedHtml(this.templateForm.value.content ?? '');
-    this.previewContent = this.previewFrameHtml();
-    this.visible = true;
-  }
-
-  protected onCancel(): void {}
-
-  protected onHideClauseDetailsPopup(): void {
-    this.showClauseDetailsDialog = false;
-  }
-
   protected resetSample(): void {
-    const sample = SAMPLE_DOCUMENT.trim();
-    this.editor?.setContent(sample);
-    this.templateForm.patchValue({ content: sample }, { emitEvent: false });
-    this.syncDerivedHtml(sample);
+    this.editor?.setContent(SAMPLE_DOCUMENT);
+    this.syncDerivedHtml(SAMPLE_DOCUMENT);
   }
 
   protected loadPreviewBodyIntoEditor(): void {
-    const previewBody = this.exportHtml();
-
     if (!this.editor) {
       return;
     }
 
     this.editor.setContent('');
-    this.editor.setContent(previewBody);
+    this.editor.setContent(this.exportHtml());
   }
 
   protected updatePatchValue(value: string): void {
@@ -337,8 +391,13 @@ export class CreateEditTemplateComponent implements AfterViewInit {
   }
 
   protected async copyExportHtml(): Promise<void> {
-    await navigator.clipboard.writeText(this.exportHtml());
-    this.copyLabel.set('Copied');
+    try {
+      await navigator.clipboard.writeText(this.exportHtml());
+      this.copyLabel.set('Copied');
+    } catch (error) {
+      console.error(error);
+      this.copyLabel.set('Copy failed');
+    }
 
     window.setTimeout(() => {
       this.copyLabel.set('Copy export HTML');
@@ -346,13 +405,6 @@ export class CreateEditTemplateComponent implements AfterViewInit {
   }
 
   private async initEditor(): Promise<void> {
-    const host = this.editorHost();
-
-    if (!host) {
-      return;
-    }
-
-    const target = host.nativeElement;
     const tinymce = this.getTinyMceGlobal();
 
     if (!tinymce) {
@@ -360,8 +412,9 @@ export class CreateEditTemplateComponent implements AfterViewInit {
     }
 
     const [editor] = await tinymce.init({
-      target,
-      height: 340,
+      target: this.editorHost().nativeElement,
+      height: 420,
+      license_key: 'gpl',
       menubar: 'file edit insert format tools table',
       branding: false,
       promotion: false,
@@ -377,11 +430,9 @@ export class CreateEditTemplateComponent implements AfterViewInit {
       extended_valid_elements: '*[*]',
       setup: (activeEditor: TinyMceEditorWithEvents) => {
         activeEditor.on('init', () => {
-          const initialContent = (this.templateForm.value.content || SAMPLE_DOCUMENT).trim();
-          activeEditor.setContent(initialContent);
+          activeEditor.setContent(SAMPLE_DOCUMENT);
           this.updateEditorMarkers(activeEditor);
-          this.templateForm.patchValue({ content: initialContent }, { emitEvent: false });
-          this.syncDerivedHtml(initialContent);
+          this.syncDerivedHtml(SAMPLE_DOCUMENT);
           this.status.set('Editor ready');
         });
 
@@ -408,14 +459,16 @@ export class CreateEditTemplateComponent implements AfterViewInit {
 
         activeEditor.on('change input undo redo setcontent', () => {
           this.updateEditorMarkers(activeEditor);
-          const sanitizedContent = this.sanitizeEditorContent(activeEditor.getContent());
-          this.templateForm.patchValue({ content: sanitizedContent }, { emitEvent: false });
-          this.syncDerivedHtml(sanitizedContent);
+          this.syncDerivedHtml(this.sanitizeEditorContent(activeEditor.getContent()));
         });
       },
     });
 
     this.editor = editor;
+  }
+
+  private getTinyMceGlobal(): TinyMceGlobal | undefined {
+    return (window as TinyMceWindow).tinymce;
   }
 
   private isInsideList(editor: TinyMceEditor): boolean {
@@ -457,16 +510,11 @@ export class CreateEditTemplateComponent implements AfterViewInit {
 
     const container = document.createElement('div');
     container.innerHTML = content;
-    const renderedRoot =
-      container.querySelector('[data-rendered-preview="true"]') ??
-      container.querySelector('[data-rendered-list="true"]')?.parentElement;
-
-    if (!renderedRoot) {
-      return content;
-    }
-
+    const previewRoot = container.querySelector('[data-rendered-preview="true"]');
+    const sourceRoot = previewRoot ?? container;
     const normalizedRoot = document.createElement('div');
-    Array.from(renderedRoot.childNodes).forEach((node) => {
+
+    Array.from(sourceRoot.childNodes).forEach((node) => {
       normalizedRoot.appendChild(node.cloneNode(true));
     });
 
@@ -503,19 +551,11 @@ export class CreateEditTemplateComponent implements AfterViewInit {
 
     this.applyBlockStyles(documentFragment);
 
-    const topLevelLists = Array.from(documentFragment.querySelectorAll('ol')).filter(
-      (list): list is HTMLOListElement => !list.parentElement?.closest('li'),
-    );
-
-    const topLevelUnorderedLists = Array.from(documentFragment.querySelectorAll('ul')).filter(
-      (list): list is HTMLUListElement => !list.parentElement?.closest('li'),
+    const topLevelLists = Array.from(documentFragment.querySelectorAll('ol, ul')).filter(
+      (list): list is HTMLOListElement | HTMLUListElement => !list.parentElement?.closest('li'),
     );
 
     topLevelLists.forEach((list) => {
-      list.replaceWith(this.buildRenderedList(list, [], 0));
-    });
-
-    topLevelUnorderedLists.forEach((list) => {
       list.replaceWith(this.buildRenderedList(list, [], 0));
     });
 
@@ -523,11 +563,12 @@ export class CreateEditTemplateComponent implements AfterViewInit {
   }
 
   private convertRenderedPreviewToSemantic(root: ParentNode): void {
-    const renderedLists = Array.from(root.querySelectorAll('div[data-rendered-list="true"]'));
+    const renderedLists = Array.from(root.querySelectorAll('div[data-rendered-list="true"]')).filter(
+      (list) => !list.parentElement?.closest('div[data-rendered-list="true"]'),
+    );
 
     renderedLists.forEach((renderedList) => {
-      const semanticList = this.buildSemanticListFromRendered(renderedList);
-      renderedList.replaceWith(semanticList);
+      renderedList.replaceWith(this.buildSemanticListFromRendered(renderedList));
     });
   }
 
@@ -548,7 +589,7 @@ export class CreateEditTemplateComponent implements AfterViewInit {
       this.mergeMissingStyles(paragraph as HTMLElement, PARAGRAPH_STYLE);
     });
 
-    root.querySelectorAll('ol').forEach((list) => {
+    root.querySelectorAll('ol, ul').forEach((list) => {
       this.mergeMissingStyles(list as HTMLElement, LIST_STYLE);
     });
 
@@ -580,12 +621,17 @@ export class CreateEditTemplateComponent implements AfterViewInit {
     const renderedList = document.createElement('div');
     const listKind = this.getListKind(list);
     const listFormat = this.getListFormat(list);
+    const start = Number.parseInt(list.getAttribute('start') ?? '1', 10);
     renderedList.setAttribute('data-rendered-list', 'true');
     renderedList.setAttribute('data-rendered-list-kind', listKind);
     renderedList.setAttribute('data-rendered-list-format', listFormat);
+
+    if (listKind === 'ol' && !Number.isNaN(start) && start !== 1) {
+      renderedList.setAttribute('data-rendered-list-start', `${start}`);
+    }
+
     renderedList.setAttribute('style', RENDERED_LIST_STYLE);
 
-    const start = Number.parseInt(list.getAttribute('start') ?? '1', 10);
     const items = Array.from(list.children).filter(
       (child): child is HTMLLIElement => child.tagName === 'LI',
     );
@@ -594,10 +640,7 @@ export class CreateEditTemplateComponent implements AfterViewInit {
       const currentNumber = Number.isNaN(start) ? itemIndex + 1 : start + itemIndex;
       const currentOrderedMarkerSegments =
         listKind === 'ol'
-          ? [
-              ...parentOrderedMarkerSegments,
-              this.formatListValue(currentNumber, listFormat),
-            ]
+          ? [...parentOrderedMarkerSegments, this.formatListValue(currentNumber, listFormat)]
           : parentOrderedMarkerSegments;
       const markerText =
         listKind === 'ol'
@@ -622,10 +665,7 @@ export class CreateEditTemplateComponent implements AfterViewInit {
         `${ROW_STYLE};margin-left:${depth * PREVIEW_INDENT_PER_LEVEL_PT}pt;padding-left:${depth * PREVIEW_INDENT_PER_LEVEL_PT}pt`,
       );
 
-      const textIndent = document.createTextNode(
-        PREVIEW_TEXT_INDENT_PER_LEVEL.repeat(depth),
-      );
-
+      const textIndent = document.createTextNode(PREVIEW_TEXT_INDENT_PER_LEVEL.repeat(depth));
       const marker = document.createElement('strong');
       marker.setAttribute('data-rendered-marker', 'true');
       marker.setAttribute('style', MARKER_STYLE);
@@ -653,28 +693,39 @@ export class CreateEditTemplateComponent implements AfterViewInit {
 
       renderedList.appendChild(renderedItem);
     });
+
     return renderedList;
   }
 
   private buildSemanticListFromRendered(
     renderedList: Element,
   ): HTMLOListElement | HTMLUListElement {
-    const listKind =
-      renderedList.getAttribute('data-rendered-list-kind') === 'ul' ? 'ul' : 'ol';
+    const listKind = renderedList.getAttribute('data-rendered-list-kind') === 'ul' ? 'ul' : 'ol';
     const semanticList = document.createElement(listKind) as HTMLOListElement | HTMLUListElement;
     const listFormat = renderedList.getAttribute('data-rendered-list-format');
+    const listStart = renderedList.getAttribute('data-rendered-list-start');
 
     if (listFormat) {
       semanticList.style.listStyleType = listFormat;
-      const htmlType = listKind === 'ol' ? this.toHtmlListType(listFormat) : null;
 
-      if (htmlType) {
-        semanticList.setAttribute('type', htmlType);
+      if (listKind === 'ol') {
+        const htmlType = this.toHtmlListType(listFormat);
+
+        if (htmlType) {
+          semanticList.setAttribute('type', htmlType);
+        }
+      } else if (listFormat !== 'disc') {
+        semanticList.setAttribute('type', listFormat);
       }
     }
 
+    if (listKind === 'ol' && listStart) {
+      semanticList.setAttribute('start', listStart);
+    }
+
     const renderedItems = Array.from(renderedList.children).filter(
-      (child): child is HTMLDivElement => child instanceof HTMLDivElement && child.dataset['renderedItem'] === 'true',
+      (child): child is HTMLDivElement =>
+        child instanceof HTMLDivElement && child.dataset['renderedItem'] === 'true',
     );
 
     renderedItems.forEach((renderedItem) => {
@@ -687,7 +738,7 @@ export class CreateEditTemplateComponent implements AfterViewInit {
         Array.from(contentWrapper.childNodes).forEach((node) => {
           if (
             node instanceof HTMLElement &&
-            (node.dataset['renderedList'] === 'true' || node.tagName === 'OL')
+            (node.dataset['renderedList'] === 'true' || node.tagName === 'OL' || node.tagName === 'UL')
           ) {
             return;
           }
@@ -714,14 +765,14 @@ export class CreateEditTemplateComponent implements AfterViewInit {
   private hasVisibleContent(nodes: Node[]): boolean {
     return nodes.some((node) => {
       if (node.nodeType === Node.TEXT_NODE) {
-        return node.textContent?.trim().length;
+        return (node.textContent?.trim().length ?? 0) > 0;
       }
 
       if (!(node instanceof HTMLElement)) {
         return false;
       }
 
-      return node.textContent?.trim().length || node.tagName === 'IMG' || node.tagName === 'BR';
+      return (node.textContent?.trim().length ?? 0) > 0 || node.tagName === 'IMG' || node.tagName === 'BR';
     });
   }
 
@@ -756,17 +807,11 @@ export class CreateEditTemplateComponent implements AfterViewInit {
       const currentNumber = Number.isNaN(start) ? itemIndex + 1 : start + itemIndex;
       const currentOrderedMarkerSegments =
         listKind === 'ol'
-          ? [
-              ...parentOrderedMarkerSegments,
-              this.formatListValue(currentNumber, listFormat),
-            ]
+          ? [...parentOrderedMarkerSegments, this.formatListValue(currentNumber, listFormat)]
           : parentOrderedMarkerSegments;
 
       if (listKind === 'ol') {
-        item.setAttribute(
-          EDITOR_MARKER_ATTRIBUTE,
-          `${currentOrderedMarkerSegments.join('.')}.`,
-        );
+        item.setAttribute(EDITOR_MARKER_ATTRIBUTE, `${currentOrderedMarkerSegments.join('.')}.`);
       }
 
       const nestedLists = Array.from(item.children).filter(
@@ -786,23 +831,37 @@ export class CreateEditTemplateComponent implements AfterViewInit {
 
   private getListFormat(list: HTMLOListElement | HTMLUListElement): string {
     const listKind = this.getListKind(list);
-    const styleType = list.style.listStyleType || list.getAttribute('data-mce-style') || '';
-    const inlineMatch = styleType.match(/list-style-type\s*:\s*([a-z-]+)/i);
 
-    if (inlineMatch?.[1]) {
-      return inlineMatch[1].toLowerCase();
+    const inlineStyleSources = [
+      list.getAttribute('data-mce-style') ?? '',
+      list.getAttribute('style') ?? '',
+    ];
+
+    for (const source of inlineStyleSources) {
+      const match = source.match(/list-style-type\s*:\s*([a-z-]+)/i);
+
+      if (match?.[1]) {
+        return match[1].toLowerCase();
+      }
     }
 
-    const declaredStyle = list.style.listStyleType;
-    if (declaredStyle) {
-      return declaredStyle.toLowerCase();
-    }
-
-    if (listKind === 'ul') {
-      return 'disc';
+    if (list.style.listStyleType) {
+      return list.style.listStyleType.toLowerCase();
     }
 
     const type = (list.getAttribute('type') || '').trim();
+
+    if (listKind === 'ul') {
+      switch (type) {
+        case 'circle':
+        case 'square':
+        case 'disc':
+          return type;
+        default:
+          return 'disc';
+      }
+    }
+
     switch (type) {
       case 'a':
         return 'lower-alpha';
@@ -830,8 +889,30 @@ export class CreateEditTemplateComponent implements AfterViewInit {
         return this.toRoman(value).toUpperCase();
       case 'lower-greek':
         return this.toAlphabetic(value, [
-          'α', 'β', 'γ', 'δ', 'ε', 'ζ', 'η', 'θ', 'ι', 'κ', 'λ', 'μ',
-          'ν', 'ξ', 'ο', 'π', 'ρ', 'σ', 'τ', 'υ', 'φ', 'χ', 'ψ', 'ω',
+          '\u03b1',
+          '\u03b2',
+          '\u03b3',
+          '\u03b4',
+          '\u03b5',
+          '\u03b6',
+          '\u03b7',
+          '\u03b8',
+          '\u03b9',
+          '\u03ba',
+          '\u03bb',
+          '\u03bc',
+          '\u03bd',
+          '\u03be',
+          '\u03bf',
+          '\u03c0',
+          '\u03c1',
+          '\u03c3',
+          '\u03c4',
+          '\u03c5',
+          '\u03c6',
+          '\u03c7',
+          '\u03c8',
+          '\u03c9',
         ]);
       case 'decimal':
       default:
@@ -842,12 +923,12 @@ export class CreateEditTemplateComponent implements AfterViewInit {
   private formatUnorderedMarker(format: string): string {
     switch (format) {
       case 'circle':
-        return '◦';
+        return '\u25e6';
       case 'square':
-        return '▪';
+        return '\u25aa';
       case 'disc':
       default:
-        return '•';
+        return '\u2022';
     }
   }
 
@@ -940,16 +1021,12 @@ export class CreateEditTemplateComponent implements AfterViewInit {
       }
 
       const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/tinymce@7/tinymce.min.js';
+      script.src = 'https://cdn.jsdelivr.net/npm/tinymce@8/tinymce.min.js';
       script.referrerPolicy = 'origin';
       script.dataset['tinymceLoader'] = 'true';
       script.onload = () => resolve();
       script.onerror = () => reject(new Error('Failed to load TinyMCE script.'));
       document.head.append(script);
     });
-  }
-
-  private getTinyMceGlobal(): TinyMceGlobal | undefined {
-    return (window as TinyMceWindow).tinymce;
   }
 }
