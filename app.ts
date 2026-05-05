@@ -4,42 +4,24 @@ import {
   Component,
   DestroyRef,
   ElementRef,
-  HostListener,
+  NO_ERRORS_SCHEMA,
   inject,
   signal,
   viewChild,
 } from '@angular/core';
+import { ReactiveFormsModule, UntypedFormBuilder, UntypedFormGroup, Validators } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { RouterModule } from '@angular/router';
 
 type TinyMceEditor = {
   execCommand: (command: string) => void;
-  focus: () => void;
   getBody: () => HTMLElement;
   getContent: (options?: { format?: string }) => string;
-  insertContent: (content: string) => void;
   remove: () => void;
   selection: {
     getNode: () => Node;
-    setContent: (content: string) => void;
   };
   setContent: (content: string) => void;
-  notificationManager: {
-    open: (options: { text: string; type: 'success' | 'info' | 'warning' | 'error'; timeout?: number }) => void;
-  };
-  dom: {
-    getParent: (node: Node, selector: string) => HTMLElement | null;
-    remove: (node: Node) => void;
-    select: (selector: string) => HTMLElement[];
-    setStyle: (nodes: HTMLElement[] | HTMLElement, property: string, value: string) => void;
-  };
-  ui: {
-    registry: {
-      addButton: (
-        name: string,
-        options: { text: string; tooltip?: string; icon?: string; onAction: () => void },
-      ) => void;
-    };
-  };
 };
 
 type TinyMceEditorWithEvents = TinyMceEditor & {
@@ -223,16 +205,52 @@ const EDITOR_CONTENT_STYLE = `
 
 @Component({
   selector: 'app-create-edit-template',
-  imports: [CommonModule],
+  imports: [CommonModule, ReactiveFormsModule, RouterModule],
   templateUrl: './create-edit-template.component.html',
   styleUrl: './create-edit-template.component.css',
+  schemas: [NO_ERRORS_SCHEMA],
 })
 export class CreateEditTemplateComponent implements AfterViewInit {
   private readonly destroyRef = inject(DestroyRef);
+  private readonly fb = inject(UntypedFormBuilder);
   private readonly sanitizer = inject(DomSanitizer);
-  private readonly editorHost =
-    viewChild.required<ElementRef<HTMLTextAreaElement>>('editorHost');
+  private readonly editorHost = viewChild<ElementRef<HTMLTextAreaElement>>('editorHost');
 
+  protected readonly items = [
+    { icon: 'pi pi-home', route: '/' },
+    { label: 'Template Management', route: '/template-management' },
+    { label: 'Create' },
+  ];
+  protected readonly templateForm: UntypedFormGroup = this.fb.group({
+    id: [null],
+    name: [''],
+    organisationId: [null],
+    countryIds: [[] as number[]],
+    languageId: [null],
+    content: [SAMPLE_DOCUMENT.trim(), Validators.required],
+    status: [true],
+  });
+  protected readonly config = null;
+  protected readonly variablesGroups: unknown[] = [];
+  protected readonly clauses: Array<{
+    status?: string;
+    title?: string;
+    contentParse?: string;
+  }> = [];
+  protected readonly first = 0;
+  protected readonly rows = 10;
+  protected readonly totalRecord = 0;
+  protected readonly formDirty = false;
+  protected readonly editMode = false;
+  protected visible = false;
+  protected previewContent: SafeHtml | null = null;
+  protected showClauseDetailsDialog = false;
+  protected clauseDetails: {
+    clauseId?: number;
+    title?: string;
+    conditionExpression?: { conditions?: unknown[] };
+  } | null = null;
+  protected savedCriteria = null;
   protected readonly status = signal('Loading TinyMCE...');
   protected readonly rawHtml = signal(SAMPLE_DOCUMENT.trim());
   protected readonly previewHtml = signal(this.buildPreviewBody(SAMPLE_DOCUMENT));
@@ -242,57 +260,58 @@ export class CreateEditTemplateComponent implements AfterViewInit {
   protected readonly exportHtml = signal(this.buildPreviewBody(SAMPLE_DOCUMENT));
   protected readonly patchValue = signal('');
   protected readonly copyLabel = signal('Copy export HTML');
-  protected readonly selectedSize = signal({ label: 'A4', width: '210mm', height: '297mm' });
-  protected readonly pageSizes = [
-    { label: 'A4', width: '210mm', height: '297mm' },
-    { label: 'Letter', width: '216mm', height: '279mm' },
-    { label: 'Legal', width: '216mm', height: '356mm' },
-    { label: 'A3', width: '297mm', height: '420mm' },
-  ];
-  protected readonly isDirty = signal(false);
 
   private editor?: TinyMceEditor;
 
   async ngAfterViewInit(): Promise<void> {
-    await this.loadTinyMce();
-    await this.initEditor();
+    if (this.editorHost()) {
+      await this.loadTinyMce();
+      await this.initEditor();
+    } else {
+      this.syncDerivedHtml(this.templateForm.value.content ?? SAMPLE_DOCUMENT);
+      this.status.set('Shared template loaded');
+    }
 
     this.destroyRef.onDestroy(() => {
       this.editor?.remove();
     });
   }
 
-  @HostListener('window:beforeunload', ['$event'])
-  protected handleBeforeUnload(event: BeforeUnloadEvent): void {
-    if (!this.isDirty()) {
-      return;
-    }
-
-    event.preventDefault();
-    event.returnValue = 'Changes you made may not be saved.';
+  protected get templateFormControl(): any {
+    return this.templateForm.controls;
   }
 
-  canDeactivate(): boolean {
-    if (this.isDirty()) {
-      return confirm('Changes you made may not be saved.');
-    }
+  protected onSubmit(): void {
+    this.syncDerivedHtml(this.templateForm.value.content ?? '');
+  }
 
-    return true;
+  protected onEditorInit(_event: unknown): void {}
+
+  protected onDragVariable(_event: unknown): void {}
+
+  protected onSearchClause(_event: Event): void {}
+
+  protected onDragClause(_event: DragEvent, _clause: unknown): void {}
+
+  protected onLoadClauses(_event?: unknown): void {}
+
+  protected onPreview(): void {
+    this.syncDerivedHtml(this.templateForm.value.content ?? '');
+    this.previewContent = this.previewFrameHtml();
+    this.visible = true;
+  }
+
+  protected onCancel(): void {}
+
+  protected onHideClauseDetailsPopup(): void {
+    this.showClauseDetailsDialog = false;
   }
 
   protected resetSample(): void {
-    this.editor?.setContent(SAMPLE_DOCUMENT);
-    this.syncDerivedHtml(SAMPLE_DOCUMENT);
-    this.isDirty.set(false);
-  }
-
-  protected onPageSizeChange(event: Event): void {
-    const label = (event.target as HTMLSelectElement).value;
-    const size = this.pageSizes.find((pageSize) => pageSize.label === label);
-
-    if (size) {
-      this.setEditorSize(size);
-    }
+    const sample = SAMPLE_DOCUMENT.trim();
+    this.editor?.setContent(sample);
+    this.templateForm.patchValue({ content: sample }, { emitEvent: false });
+    this.syncDerivedHtml(sample);
   }
 
   protected loadPreviewBodyIntoEditor(): void {
@@ -317,7 +336,6 @@ export class CreateEditTemplateComponent implements AfterViewInit {
 
     this.editor.setContent('');
     this.editor.setContent(this.patchValue());
-    this.isDirty.set(true);
   }
 
   protected async copyExportHtml(): Promise<void> {
@@ -329,8 +347,14 @@ export class CreateEditTemplateComponent implements AfterViewInit {
     }, 1600);
   }
 
-  private async initEditor(): Promise<TinyMceEditor> {
-    const target = this.editorHost().nativeElement;
+  private async initEditor(): Promise<void> {
+    const host = this.editorHost();
+
+    if (!host) {
+      return;
+    }
+
+    const target = host.nativeElement;
     const tinymce = window.tinymce;
 
     if (!tinymce) {
@@ -339,33 +363,28 @@ export class CreateEditTemplateComponent implements AfterViewInit {
 
     const [editor] = await tinymce.init({
       target,
-      width: this.selectedSize().width,
-      height: 720,
-      menubar: 'file edit view insert format tools table help',
+      height: 340,
+      menubar: 'file edit insert format tools table',
       branding: false,
       promotion: false,
-      plugins: 'lists advlist link image table code wordcount paste pagebreak preview',
+      plugins: 'lists advlist link table code autoresize',
+      advlist_number_styles:
+        'default,lower-alpha,upper-alpha,lower-roman,upper-roman,lower-greek',
+      advlist_bullet_styles: 'default,circle,square',
       toolbar:
-        'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | align numlist bullist | outdent indent | link image customUploadButton | headerBtn footerBtn | pagebreak | table code',
+        'undo redo | blocks | bold italic underline | numlist bullist | outdent indent | link table | code',
       block_formats: 'Paragraph=p; Heading 1=h1; Heading 2=h2; Heading 3=h3',
       lists_indent_on_tab: true,
       content_style: EDITOR_CONTENT_STYLE,
-      editable_root: true,
       extended_valid_elements: '*[*]',
-      valid_elements: '*[*]',
-      paste_merge_formats: true,
-      paste_data_images: true,
-      images_upload_handler: (blobInfo: { blob: () => Blob }) =>
-        this.readBlobAsDataUrl(blobInfo.blob()),
       setup: (activeEditor: TinyMceEditorWithEvents) => {
-        this.setupEditorButtons(activeEditor);
-
         activeEditor.on('init', () => {
-          activeEditor.setContent(SAMPLE_DOCUMENT);
+          const initialContent = (this.templateForm.value.content || SAMPLE_DOCUMENT).trim();
+          activeEditor.setContent(initialContent);
           this.updateEditorMarkers(activeEditor);
-          this.syncDerivedHtml(SAMPLE_DOCUMENT);
+          this.templateForm.patchValue({ content: initialContent }, { emitEvent: false });
+          this.syncDerivedHtml(initialContent);
           this.status.set('Editor ready');
-          this.isDirty.set(false);
         });
 
         activeEditor.on('BeforeSetContent', (event) => {
@@ -391,240 +410,14 @@ export class CreateEditTemplateComponent implements AfterViewInit {
 
         activeEditor.on('change input undo redo setcontent', () => {
           this.updateEditorMarkers(activeEditor);
-          this.syncDerivedHtml(this.sanitizeEditorContent(activeEditor.getContent()));
-          this.isDirty.set(true);
-        });
-
-        activeEditor.on('drop', (event) => {
-          this.handleDropImage(activeEditor, event as DragEvent);
+          const sanitizedContent = this.sanitizeEditorContent(activeEditor.getContent());
+          this.templateForm.patchValue({ content: sanitizedContent }, { emitEvent: false });
+          this.syncDerivedHtml(sanitizedContent);
         });
       },
     });
 
     this.editor = editor;
-    return editor;
-  }
-
-  private setEditorSize(size: { label: string; width: string; height: string }): void {
-    this.selectedSize.set(size);
-    this.initEditorWithCurrentContent();
-  }
-
-  private async initEditorWithCurrentContent(): Promise<void> {
-    const content = this.editor?.getContent() ?? SAMPLE_DOCUMENT;
-    this.editor?.remove();
-    this.editor = undefined;
-    const editor = await this.initEditor();
-    editor.setContent(content);
-    this.syncDerivedHtml(this.sanitizeEditorContent(content));
-  }
-
-  private setupEditorButtons(editor: TinyMceEditorWithEvents): void {
-    editor.ui.registry.addButton('headerBtn', {
-      text: 'Header',
-      tooltip: 'Insert header layout',
-      onAction: () => this.insertHeader(editor),
-    });
-
-    editor.ui.registry.addButton('footerBtn', {
-      text: 'Footer',
-      tooltip: 'Insert footer layout',
-      onAction: () => this.insertFooter(editor),
-    });
-
-    editor.ui.registry.addButton('customUploadButton', {
-      text: 'Upload Image',
-      icon: 'image',
-      onAction: () => this.triggerImageUpload(editor),
-    });
-
-    editor.on('click', (event?: unknown) => {
-      const target = (event as MouseEvent).target as HTMLElement | null;
-
-      if (!target) {
-        return;
-      }
-
-      if (target.classList.contains('delete-header-btn')) {
-        this.removeLayoutSection(editor, target, 'header');
-      }
-
-      if (target.classList.contains('delete-footer-btn')) {
-        this.removeLayoutSection(editor, target, 'footer');
-      }
-    });
-
-    editor.on('ExecCommand', (event?: unknown) => {
-      const commandEvent = event as { command?: string; value?: string; preventDefault?: () => void };
-
-      if (commandEvent.command === 'BackColor') {
-        this.applyHeaderStyle(editor, 'background-color', commandEvent.value);
-        commandEvent.preventDefault?.();
-      }
-
-      if (commandEvent.command === 'ForeColor') {
-        this.applyHeaderStyle(editor, 'color', commandEvent.value);
-        commandEvent.preventDefault?.();
-      }
-    });
-  }
-
-  private insertHeader(editor: TinyMceEditor): void {
-    if (this.hasLayoutSection(editor, 'header')) {
-      editor.notificationManager.open({
-        text: 'Header already exists',
-        type: 'info',
-        timeout: 1500,
-      });
-      return;
-    }
-
-    if (this.findLayoutElement(editor, 'footer')) {
-      editor.notificationManager.open({
-        text: 'You can not drop footer inside header',
-        type: 'info',
-        timeout: 1500,
-      });
-      return;
-    }
-
-    editor.insertContent(`
-      <div class="header" data-section="header" title="Header" style="position: relative;">
-        <button class="delete-header-btn" style="display: none" type="button" title="Delete header" aria-label="Delete header" contenteditable="false">x</button>
-        <p>Company Header</p>
-      </div><br />
-      <p></p>
-    `);
-    this.isDirty.set(true);
-  }
-
-  private insertFooter(editor: TinyMceEditor): void {
-    if (this.hasLayoutSection(editor, 'footer')) {
-      editor.notificationManager.open({
-        text: 'Footer already exists',
-        type: 'info',
-        timeout: 1500,
-      });
-      return;
-    }
-
-    if (this.findLayoutElement(editor, 'header')) {
-      editor.notificationManager.open({
-        text: 'You can not drop header inside footer',
-        type: 'info',
-        timeout: 1500,
-      });
-      return;
-    }
-
-    editor.insertContent(`
-      <div class="footer" data-section="footer" title="footer" style="position: relative;">
-        <button class="delete-footer-btn" style="display: none" type="button" title="Delete footer" aria-label="Delete footer" contenteditable="false">x</button>
-        <p>2025 My Company | Privacy policy</p>
-      </div><br />
-      <p></p>
-    `);
-    this.isDirty.set(true);
-  }
-
-  private hasLayoutSection(editor: TinyMceEditor, type: 'header' | 'footer'): boolean {
-    return Boolean(editor.getBody().querySelector(`[data-section="${type}"]`));
-  }
-
-  private findLayoutElement(editor: TinyMceEditor, layoutType: 'header' | 'footer'): boolean {
-    let parentNode = editor.selection.getNode().parentElement;
-
-    while (parentNode && !parentNode.classList.contains(layoutType)) {
-      parentNode = parentNode.parentElement;
-    }
-
-    return Boolean(parentNode?.classList.contains(layoutType));
-  }
-
-  private removeLayoutSection(
-    editor: TinyMceEditor,
-    target: HTMLElement,
-    type: 'header' | 'footer',
-  ): void {
-    const section = editor.dom.getParent(target, `div.${type}`);
-
-    if (!section) {
-      return;
-    }
-
-    editor.dom.remove(section);
-    editor.notificationManager.open({
-      text: `${type === 'header' ? 'Header' : 'Footer'} removed`,
-      type: 'info',
-      timeout: 1500,
-    });
-    this.isDirty.set(true);
-  }
-
-  private applyHeaderStyle(
-    editor: TinyMceEditor,
-    property: 'background-color' | 'color',
-    value?: string,
-  ): void {
-    if (!value) {
-      return;
-    }
-
-    const header = editor.dom.getParent(editor.selection.getNode(), 'div.header');
-
-    if (header) {
-      editor.dom.setStyle(header, property, value);
-      this.isDirty.set(true);
-    }
-  }
-
-  private triggerImageUpload(editor: TinyMceEditor): void {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-
-    input.onchange = async () => {
-      const file = input.files?.[0];
-
-      if (!file) {
-        return;
-      }
-
-      const imageDataUrl = await this.readBlobAsDataUrl(file);
-      editor.insertContent(`<img src="${imageDataUrl}" />`);
-      this.isDirty.set(true);
-    };
-
-    input.click();
-  }
-
-  private handleDropImage(editor: TinyMceEditor, event: DragEvent): void {
-    const files = event.dataTransfer?.files;
-
-    if (!files?.length) {
-      return;
-    }
-
-    Array.from(files).forEach((file) => {
-      if (!file.type.startsWith('image/')) {
-        return;
-      }
-
-      event.preventDefault();
-      this.readBlobAsDataUrl(file).then((base64) => {
-        editor.insertContent(`<img src="${base64}" />`);
-        this.isDirty.set(true);
-      });
-    });
-  }
-
-  private readBlobAsDataUrl(blob: Blob): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(new Error('Failed to read image.'));
-      reader.readAsDataURL(blob);
-    });
   }
 
   private isInsideList(editor: TinyMceEditor): boolean {
