@@ -1,43 +1,62 @@
-Yes, in PrimeNG v18 follow the new structure: remove label from <p-radioButton> and add a separate <label> using inputId.
+Now functionality is correct, only the alignment/styling is broken.
 
-Use this:
+In PrimeNG v18, utility classes like:
 
-<div class="flex gap-4">
-  <div class="flex items-center">
+flex
+items-center
+gap-4
+ml-2
+
+work only if you installed PrimeFlex or another utility CSS library.
+
+Right now those classes are not applied, so labels are misaligned.
+
+Add proper CSS manually instead.
+
+Use this exact code:
+
+<div class="radio-group">
+  <div class="radio-item">
     <p-radioButton
       name="contractTemplateAvailable"
       [value]="true"
       formControlName="contractTemplateAvailable"
-      inputId="contractTemplateAvailableYes"
-      adminSelenium="crud_frm_event_contractTemplateAvailable_true">
+      inputId="contractTemplateAvailableYes">
     </p-radioButton>
-    <label for="contractTemplateAvailableYes" class="ml-2">Yes</label>
+    <label for="contractTemplateAvailableYes">Yes</label>
   </div>
-  <div class="flex items-center">
+  <div class="radio-item">
     <p-radioButton
       name="contractTemplateAvailable"
       [value]="false"
       formControlName="contractTemplateAvailable"
-      inputId="contractTemplateAvailableNo"
-      adminSelenium="crud_frm_event_contractTemplateAvailable_false">
+      inputId="contractTemplateAvailableNo">
     </p-radioButton>
-    <label for="contractTemplateAvailableNo" class="ml-2">No</label>
+    <label for="contractTemplateAvailableNo">No</label>
   </div>
 </div>
 
-Also make sure your form value is boolean:
+Component SCSS/CSS:
 
-contractTemplateAvailable: [null]
-// or
-contractTemplateAvailable: [true]
+.radio-group {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.radio-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
-Main change from your old code:
+OR if you want PrimeFlex utilities back like before migration:
 
-label="Yes"
+Install:
 
-should become:
+npm install primeflex
 
-<inputId="contractTemplateAvailableYes">
-<label for="contractTemplateAvailableYes">Yes</label>
+Then add in styles.scss:
 
-For PrimeNG v18, this is the safer and documented way.
+@import "primeflex/primeflex.css";
+
+Then your old utility classes (flex, gap-4, ml-2) will work again properly.
