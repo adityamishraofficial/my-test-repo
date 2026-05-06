@@ -1,76 +1,74 @@
-The green triangle is coming from old/custom CSS, not from PrimeNG calendar. Some CSS is probably targeting calendar icon with :before / :after and creating triangle shape.
+In PrimeNG v18, fix it in two places:
 
-Add this fix in calendar.component.scss:
+1. Import v18 theme correctly
 
-:host ::ng-deep {
-  .ng-wings-calendar {
-    width: 100%;
-    display: flex;
-  }
-  .ng-wings-calendar .p-inputtext {
-    flex: 1;
-    width: 100%;
-    height: 38px;
-    border-radius: 4px 0 0 4px;
-  }
-  .ng-wings-calendar .p-datepicker-trigger {
-    width: 38px;
-    min-width: 38px;
-    height: 38px;
-    padding: 0;
-    background: $theme;
-    border: 1px solid $theme;
-    color: #fff;
-    border-radius: 0 4px 4px 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .ng-wings-calendar .p-datepicker-trigger::before,
-  .ng-wings-calendar .p-datepicker-trigger::after,
-  .ng-wings-calendar .p-calendar::before,
-  .ng-wings-calendar .p-calendar::after {
-    content: none !important;
-    display: none !important;
-    border: 0 !important;
-  }
-  .ng-wings-calendar .p-datepicker-trigger .p-button-icon,
-  .ng-wings-calendar .p-datepicker-trigger .pi {
-    color: #fff;
-    font-size: 14px;
-    margin: 0;
-  }
-}
+Remove old v17 imports like:
 
-Also change your HTML to use button icon mode:
+@import "primeng/resources/themes/lara-light-blue/theme.css";
+@import "primeng/resources/primeng.min.css";
 
-<p-calendar
-  #calendar
-  [(ngModel)]="value"
-  [disabled]="disabled"
-  [selectionMode]="selectionMode"
-  [attr.id]="id"
-  [showIcon]="true"
-  iconDisplay="button"
-  [dateFormat]="dateFormat"
-  [monthNavigator]="true"
-  [yearNavigator]="true"
-  [yearRange]="yearRange"
-  [showTime]="showTime"
-  [showSeconds]="showSeconds"
-  [hourFormat]="hourFormat"
-  styleClass="ng-wings-calendar"
-  (onBlur)="touch()"
-></p-calendar>
+Add PrimeNG provider in app.config.ts or app.module.ts:
 
-Then search globally for this kind of CSS and remove/override it:
+import { providePrimeNG } from 'primeng/config';
+import Aura from '@primeng/themes/aura';
+providers: [
+  providePrimeNG({
+    theme: {
+      preset: Aura
+    }
+  })
+]
 
-.p-calendar::before
-.p-calendar::after
-.p-datepicker-trigger::before
-.p-datepicker-trigger::after
-border-left
-border-right
-border-bottom
+PrimeNG v18 removed the old primeng/resources theme files, so without the new theme provider, components like p-radioButton display broken.  ￼
 
-That triangle is almost certainly from one of those rules.
+Also keep only:
+
+@import "primeicons/primeicons.css";
+
+⸻
+
+2. Fix radio button value type
+
+Your form control value should match boolean, not string.
+
+Use this:
+
+<p-radioButton
+  name="contractTemplateAvailable"
+  [value]="true"
+  formControlName="contractTemplateAvailable"
+  inputId="contractTemplateAvailableYes"
+  label="Yes"
+  adminSelenium="crud_frm_event_contractTemplateAvailable_true">
+</p-radioButton>
+<p-radioButton
+  name="contractTemplateAvailable"
+  [value]="false"
+  formControlName="contractTemplateAvailable"
+  inputId="contractTemplateAvailableNo"
+  label="No"
+  adminSelenium="crud_frm_event_contractTemplateAvailable_false">
+</p-radioButton>
+
+Form initialization:
+
+this.form = this.fb.group({
+  contractTemplateAvailable: [null]
+});
+
+Or default Yes:
+
+contractTemplateAvailable: [true]
+
+⸻
+
+Important
+
+Do not use:
+
+[value]="'true'"
+[value]="'false'"
+
+That makes values string "true" / "false", not boolean.
+
+PrimeNG v18 RadioButton still supports name, value, formControlName, and inputId, but styling depends on the new styled-mode theme setup.  ￼
