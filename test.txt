@@ -1,74 +1,43 @@
-In PrimeNG v18, fix it in two places:
-
-1. Import v18 theme correctly
-
-Remove old v17 imports like:
-
-@import "primeng/resources/themes/lara-light-blue/theme.css";
-@import "primeng/resources/primeng.min.css";
-
-Add PrimeNG provider in app.config.ts or app.module.ts:
-
-import { providePrimeNG } from 'primeng/config';
-import Aura from '@primeng/themes/aura';
-providers: [
-  providePrimeNG({
-    theme: {
-      preset: Aura
-    }
-  })
-]
-
-PrimeNG v18 removed the old primeng/resources theme files, so without the new theme provider, components like p-radioButton display broken.  ￼
-
-Also keep only:
-
-@import "primeicons/primeicons.css";
-
-⸻
-
-2. Fix radio button value type
-
-Your form control value should match boolean, not string.
+Yes, in PrimeNG v18 follow the new structure: remove label from <p-radioButton> and add a separate <label> using inputId.
 
 Use this:
 
-<p-radioButton
-  name="contractTemplateAvailable"
-  [value]="true"
-  formControlName="contractTemplateAvailable"
-  inputId="contractTemplateAvailableYes"
-  label="Yes"
-  adminSelenium="crud_frm_event_contractTemplateAvailable_true">
-</p-radioButton>
-<p-radioButton
-  name="contractTemplateAvailable"
-  [value]="false"
-  formControlName="contractTemplateAvailable"
-  inputId="contractTemplateAvailableNo"
-  label="No"
-  adminSelenium="crud_frm_event_contractTemplateAvailable_false">
-</p-radioButton>
+<div class="flex gap-4">
+  <div class="flex items-center">
+    <p-radioButton
+      name="contractTemplateAvailable"
+      [value]="true"
+      formControlName="contractTemplateAvailable"
+      inputId="contractTemplateAvailableYes"
+      adminSelenium="crud_frm_event_contractTemplateAvailable_true">
+    </p-radioButton>
+    <label for="contractTemplateAvailableYes" class="ml-2">Yes</label>
+  </div>
+  <div class="flex items-center">
+    <p-radioButton
+      name="contractTemplateAvailable"
+      [value]="false"
+      formControlName="contractTemplateAvailable"
+      inputId="contractTemplateAvailableNo"
+      adminSelenium="crud_frm_event_contractTemplateAvailable_false">
+    </p-radioButton>
+    <label for="contractTemplateAvailableNo" class="ml-2">No</label>
+  </div>
+</div>
 
-Form initialization:
+Also make sure your form value is boolean:
 
-this.form = this.fb.group({
-  contractTemplateAvailable: [null]
-});
-
-Or default Yes:
-
+contractTemplateAvailable: [null]
+// or
 contractTemplateAvailable: [true]
 
-⸻
+Main change from your old code:
 
-Important
+label="Yes"
 
-Do not use:
+should become:
 
-[value]="'true'"
-[value]="'false'"
+<inputId="contractTemplateAvailableYes">
+<label for="contractTemplateAvailableYes">Yes</label>
 
-That makes values string "true" / "false", not boolean.
-
-PrimeNG v18 RadioButton still supports name, value, formControlName, and inputId, but styling depends on the new styled-mode theme setup.  ￼
+For PrimeNG v18, this is the safer and documented way.
