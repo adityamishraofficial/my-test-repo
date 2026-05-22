@@ -1,39 +1,143 @@
-# PrimeFlex v2 → v3 Migration
+# PrimeFlex v2 → v3 Migration: Audit, Fix, and Verify
 
-Migrate all PrimeFlex v2 classes to PrimeFlex v3 syntax across the entire codebase. Scan all `.html`, `.component.html`, `.scss`, `.css`, and `.ts` files (including inline templates and `[ngClass]` / `class` bindings).
+## Context
 
-## Key syntax change
-PrimeFlex v3 uses **colon-prefixed responsive breakpoints** (e.g., `md:col-6`) instead of v2's dash-suffixed pattern (e.g., `p-md-6`). The `p-` prefix is dropped from most utility classes.
+A previous migration pass attempted to convert PrimeFlex v2 utility classes to PrimeFlex v3 across this Angular codebase, but it introduced **two categories of errors** that must be fixed:
 
-## Class mapping rules
+1. **Wrong v3 class names** — e.g., `flex` used instead of `grid`, `flex-md-2` instead of `md:col-2`, `ms-md-1` instead of `md:col-offset-1`.
+2. **Modified PrimeNG component tags** — e.g., `<p-fieldset>` was changed to `<fieldset>`, breaking the PrimeNG component.
 
-### Grid system
+Your job is to audit the entire codebase, **revert incorrect changes to PrimeNG components**, **fix incorrect class replacements**, and **complete any remaining v2 → v3 migration** properly.
+
+---
+
+## CRITICAL RULES — Read These First
+
+### Rule 1: Never modify PrimeNG component tags or directives
+
+PrimeFlex migration applies **ONLY** to CSS utility classes inside `class="..."`, `[ngClass]="..."`, and `[class.xxx]="..."` bindings, plus matching selectors in `.scss` / `.css` files.
+
+It must **NEVER** touch:
+
+**(a) Angular/PrimeNG component selectors** — any tag of the form `<p-xxx>` or `<p-xxx-yyy>`. These are components, not CSS classes. Leave these untouched (non-exhaustive list):
+
+`<p-fieldset>`, `<p-button>`, `<p-dialog>`, `<p-dropdown>`, `<p-select>`, `<p-table>`, `<p-calendar>`, `<p-checkbox>`, `<p-radioButton>`, `<p-tabView>`, `<p-accordion>`, `<p-accordionTab>`, `<p-panel>`, `<p-card>`, `<p-toast>`, `<p-confirmDialog>`, `<p-confirmPopup>`, `<p-multiSelect>`, `<p-autoComplete>`, `<p-tree>`, `<p-treeTable>`, `<p-menu>`, `<p-tieredMenu>`, `<p-overlayPanel>`, `<p-paginator>`, `<p-progressBar>`, `<p-progressSpinner>`, `<p-fileUpload>`, `<p-inputNumber>`, `<p-inputSwitch>`, `<p-slider>`, `<p-rating>`, `<p-listbox>`, `<p-orderList>`, `<p-pickList>`, `<p-galleria>`, `<p-carousel>`, `<p-chip>`, `<p-tag>`, `<p-badge>`, `<p-avatar>`, `<p-avatarGroup>`, `<p-toolbar>`, `<p-splitButton>`, `<p-menubar>`, `<p-breadcrumb>`, `<p-steps>`, `<p-megaMenu>`, `<p-panelMenu>`, `<p-scrollPanel>`, `<p-divider>`, `<p-skeleton>`, `<p-image>`, `<p-blockUI>`, `<p-inplace>`, `<p-virtualScroller>`, `<p-organizationChart>`, `<p-knob>`, `<p-colorPicker>`, `<p-editor>`, `<p-cascadeSelect>`, `<p-treeSelect>`, `<p-inputMask>`, `<p-chips>`, `<p-selectButton>`, `<p-toggleButton>`, `<p-speedDial>`, `<p-dock>`, `<p-tabMenu>`, `<p-contextMenu>`, `<p-scrollTop>`, `<p-sidebar>`, `<p-messages>`, `<p-message>`, `<p-header>`, `<p-footer>`, `<p-column>`, `<p-columnFilter>`, `<p-rowGroup>`, `<p-sortIcon>`, `<p-tableCheckbox>`, `<p-tableRadioButton>`, `<p-cellEditor>`, `<p-editableColumn>`, and any other tag matching `<p-[A-Za-z][A-Za-z0-9-]*>`.
+
+Also leave alone any custom app components matching this pattern if they exist in the project.
+
+**(b) PrimeNG attribute directives** — any attribute starting with lowercase `p` followed by an uppercase letter:
+
+`pButton`, `pInputText`, `pInputTextarea`, `pPassword`, `pTooltip`, `pRipple`, `pDraggable`, `pDroppable`, `pTemplate`, `pSortableColumn`, `pReorderableColumn`, `pResizableColumn`, `pSelectableRow`, `pSelectableRowDblClick`, `pEditableColumn`, `pEditableRow`, `pInitEditableRow`, `pSaveEditableRow`, `pCancelEditableRow`, `pAnimate`, `pFocus`, `pAutoFocus`, `pContextMenuRow`, `pRowToggler`, `pPaginator`, `pStyleClass`, `pBadge`.
+
+**(c) PrimeNG-specific CSS classes** — class names that style PrimeNG components themselves. These follow the `.p-{component}` pattern and remain unchanged in PrimeNG. Examples (non-exhaustive):
+
+`.p-button`, `.p-button-label`, `.p-button-icon`, `.p-button-text`, `.p-button-raised`, `.p-button-rounded`, `.p-button-outlined`, `.p-inputtext`, `.p-inputgroup`, `.p-inputgroup-addon`, `.p-dialog`, `.p-dialog-header`, `.p-dialog-content`, `.p-dialog-footer`, `.p-dialog-mask`, `.p-fieldset`, `.p-fieldset-legend`, `.p-fieldset-content`, `.p-dropdown`, `.p-dropdown-panel`, `.p-dropdown-items`, `.p-dropdown-item`, `.p-dropdown-trigger`, `.p-dropdown-label`, `.p-table`, `.p-datatable`, `.p-datatable-wrapper`, `.p-datatable-thead`, `.p-datatable-tbody`, `.p-datatable-tfoot`, `.p-checkbox`, `.p-checkbox-box`, `.p-checkbox-icon`, `.p-radiobutton`, `.p-calendar`, `.p-datepicker`, `.p-tabview`, `.p-tabview-nav`, `.p-tabview-panels`, `.p-accordion`, `.p-accordion-tab`, `.p-accordion-header`, `.p-accordion-content`, `.p-panel`, `.p-panel-header`, `.p-panel-content`, `.p-card`, `.p-card-body`, `.p-card-content`, `.p-toast`, `.p-tooltip`, `.p-overlay`, `.p-overlaypanel`, `.p-menu`, `.p-menuitem`, `.p-menubar`, `.p-paginator`, `.p-progressbar`, `.p-progressspinner`, `.p-fileupload`, `.p-inputnumber`, `.p-inputswitch`, `.p-slider`, `.p-rating`, `.p-listbox`, `.p-multiselect`, `.p-autocomplete`, `.p-tree`, `.p-treetable`, `.p-chip`, `.p-tag`, `.p-badge`, `.p-avatar`, `.p-toolbar`, `.p-breadcrumb`, `.p-steps`, `.p-divider`, `.p-skeleton`, `.p-image`, `.p-blockui`, `.p-inplace`, `.p-virtualscroller`, `.p-organizationchart`, `.p-knob`, `.p-colorpicker`, `.p-editor`, `.p-cascadeselect`, `.p-treeselect`, `.p-inputmask`, `.p-chips`, `.p-selectbutton`, `.p-togglebutton`, `.p-speeddial`, `.p-dock`, `.p-tabmenu`, `.p-contextmenu`, `.p-scrolltop`, `.p-tieredmenu`, `.p-megamenu`, `.p-panelmenu`, `.p-scrollpanel`, `.p-galleria`, `.p-carousel`, `.p-orderlist`, `.p-picklist`, `.p-confirmdialog`, `.p-confirmpopup`, `.p-sidebar`, `.p-splitbutton`, `.p-message`, `.p-messages`, `.p-inline-message`, `.p-component`, `.p-element`, `.p-disabled`, `.p-highlight`, `.p-focus`, `.p-hover`, `.p-error`, `.p-invalid`, `.p-link`, `.p-hidden-accessible`, and any class starting with `.p-` followed by a known PrimeNG component name or part name.
+
+### Rule 2: Rule of thumb for distinguishing PrimeNG vs PrimeFlex
+
+- Between `<` and `>` (an HTML tag) → **PrimeNG component, leave alone**.
+- Lowercase `p` followed by uppercase letter as an attribute (e.g., `pButton`) → **PrimeNG directive, leave alone**.
+- A CSS selector targeting a PrimeNG component (e.g., `.p-button`, `.p-dialog-header`) → **PrimeNG style, leave alone**.
+- A token inside `class="..."`, `[ngClass]="..."`, `[class.xxx]="..."`, or a SCSS/CSS selector matching a PrimeFlex utility pattern → **PrimeFlex utility, migrate it**.
+
+### Rule 3: When in doubt, do not change
+
+Skip the change and add it to a "needs manual review" list. **Breaking a PrimeNG component is far worse than leaving a v2 utility class unmigrated.**
+
+---
+
+## Step 1: Verify PrimeFlex setup
+
+1. Open `package.json`. Confirm `primeflex` version is `^3.0.0` or higher. Report the exact version found.
+2. Open `src/styles.scss` (and any other global stylesheet entry point referenced in `angular.json`). Confirm PrimeFlex is imported, e.g.:
+   ```scss
+   @import "~primeflex/primeflex.css";
+   ```
+   - The `~` prefix resolves to `node_modules` via webpack — correct for Angular CLI projects.
+   - If the project uses Angular 17+ with no webpack `~` support, change to `@import "primeflex/primeflex.css";`.
+   - Confirm the import is **after** the PrimeNG theme import (cascade matters).
+3. Check `angular.json` `styles` array — if PrimeFlex is imported there instead of (or in addition to) `styles.scss`, flag duplication.
+4. Check current import order in `styles.scss`. If PrimeFlex is imported **after** `styles/components/all`, warn that PrimeFlex utilities will override custom component styles. Recommend whether to keep this order (typical utility-first) or move PrimeFlex earlier, but **do not change** it without my confirmation.
+5. Report all findings before making any class changes.
+
+---
+
+## Step 2: Revert incorrect PrimeNG component changes
+
+Search the entire codebase for HTML files where the previous migration replaced PrimeNG component tags with native HTML tags. Look especially for:
+
+| Incorrectly changed to | Should be reverted to |
+|---|---|
+| `<fieldset>` (where it was previously a PrimeNG component) | `<p-fieldset>` |
+| `<button>` (with PrimeNG-specific attributes like `[icon]`, `[label]`) | `<p-button>` |
+| `<dialog>` | `<p-dialog>` |
+| `<table>` (with PrimeNG-specific structure) | `<p-table>` |
+| Any native HTML tag that has Angular bindings/inputs only valid on a PrimeNG component | The original `<p-...>` tag |
+
+**Detection heuristic:** if a native HTML tag has attributes like `[legend]`, `[toggleable]`, `[collapsed]`, `[styleClass]`, `[(visible)]`, `[modal]`, `[header]`, `[value]` with template syntax, or any other Angular `@Input()` that wouldn't exist on a plain HTML element, it was likely a PrimeNG component before. Use git history (`git log -p`, `git blame`) on suspect files to confirm what the original tag was.
+
+For each reversion candidate, show me the diff **before** and **after** for review. Do not auto-apply.
+
+---
+
+## Step 3: Fix incorrect v3 class names
+
+Grep the codebase (`.html`, `.component.html`, `.scss`, `.css`, `.ts` files including inline templates) for **incorrect class patterns** the previous migration may have introduced.
+
+### Wrong → Right mapping table
+
+| Incorrect pattern | Correct v3 | When to fix |
+|---|---|---|
+| `flex` (used as grid container) | `grid` | Only when it replaced `p-grid` and contains column children. `flex` alone is a valid v3 class for `display: flex`, so check context. |
+| `flex-{sm,md,lg,xl}-{1..12}` (e.g., `flex-md-2`) | `{bp}:col-{n}` (e.g., `md:col-2`) | Always. `flex-md-2` is not a valid v3 class. |
+| `flex-{1..12}` used for column width | `col-{n}` | Only when used inside a grid container as a column. `flex-{n}` is valid v3 for `flex-grow`, so confirm context. |
+| `ms-{sm,md,lg,xl}-{1..12}` (e.g., `ms-md-1`) used as a column offset | `{bp}:col-offset-{n}` (e.g., `md:col-offset-1`) | Always. `ms-md-1` doesn't exist; `ms-1` exists as margin-inline-start (spacing scale), which is wrong for offsets. |
+| `me-{bp}-{n}` used as offset | `{bp}:col-offset-{n}` | Same reasoning. |
+| Dash-suffixed responsive utilities like `jc-md-center`, `ai-md-start`, `d-md-flex` | `md:justify-content-center`, `md:align-items-start`, `md:flex` | v3 uses colon prefix. |
+
+For each replacement, show diff before/after for review.
+
+---
+
+## Step 4: Complete any remaining v2 → v3 migration
+
+Grep for any remaining v2 PrimeFlex classes that the prior migration missed. Patterns to search for:
+
+`p-grid`, `p-col`, `p-col-*`, `p-sm-*`, `p-md-*`, `p-lg-*`, `p-xl-*`, `p-offset-*`, `p-col-offset-*`, `p-d-*`, `p-jc-*`, `p-ai-*`, `p-as-*`, `p-ac-*`, `p-dir-*`, `p-flex-*`, `p-align-*`, `p-col-align-*`, `p-m-*`, `p-mt-*`, `p-mr-*`, `p-mb-*`, `p-ml-*`, `p-mx-*`, `p-my-*`, `p-p-*`, `p-pt-*`, `p-pr-*`, `p-pb-*`, `p-pl-*`, `p-px-*`, `p-py-*`, `p-text-*`, `p-shadow-*`, `p-order-*`, `p-field`, `p-field-checkbox`, `p-field-radio`, `p-formgrid`, `p-formgroup-inline`.
+
+### Complete v2 → v3 class mapping
+
+**Grid system:**
 - `p-grid` → `grid`
 - `p-col` → `col`
-- `p-col-{n}` → `col-{n}` (n = 1–12, fixed, nogutter, etc.)
-- `p-{breakpoint}-{n}` → `{breakpoint}:col-{n}` (e.g., `p-md-6` → `md:col-6`, `p-lg-4` → `lg:col-4`)
+- `p-col-{n}` → `col-{n}` (n = 1–12, fixed, nogutter)
+- `p-{bp}-{n}` → `{bp}:col-{n}` (e.g., `p-md-6` → `md:col-6`, `p-lg-4` → `lg:col-4`)
 - `p-col-offset-{n}` → `col-offset-{n}`
-- `p-{breakpoint}-offset-{n}` → `{breakpoint}:col-offset-{n}` (e.g., `p-md-offset-1` → `md:col-offset-1`)
+- `p-{bp}-offset-{n}` → `{bp}:col-offset-{n}` (e.g., `p-md-offset-1` → `md:col-offset-1`)
 - `p-col-nogutter` → `col-nogutter`
 - `p-grid-nogutter` → `grid-nogutter`
 
-### Flexbox – direction
+**Display:**
 - `p-d-flex` → `flex`
 - `p-d-inline-flex` → `inline-flex`
 - `p-d-block` → `block`
 - `p-d-inline` → `inline`
+- `p-d-inline-block` → `inline-block`
 - `p-d-none` → `hidden`
+- Responsive variants: `p-d-{bp}-flex` → `{bp}:flex`, etc.
+
+**Flex direction:**
 - `p-dir-row` → `flex-row`
 - `p-dir-rev` → `flex-row-reverse`
 - `p-dir-col` → `flex-column`
 - `p-dir-col-rev` → `flex-column-reverse`
 
-### Flexbox – wrap
+**Flex wrap:**
 - `p-flex-wrap` → `flex-wrap`
 - `p-flex-nowrap` → `flex-nowrap`
 - `p-flex-wrap-reverse` → `flex-wrap-reverse`
 
-### Flexbox – justify content
+**Justify content:**
 - `p-jc-start` → `justify-content-start`
 - `p-jc-end` → `justify-content-end`
 - `p-jc-center` → `justify-content-center`
@@ -41,7 +145,7 @@ PrimeFlex v3 uses **colon-prefixed responsive breakpoints** (e.g., `md:col-6`) i
 - `p-jc-around` → `justify-content-around`
 - `p-jc-evenly` → `justify-content-evenly`
 
-### Flexbox – align items
+**Align items:**
 - `p-ai-start` → `align-items-start`
 - `p-ai-end` → `align-items-end`
 - `p-ai-center` → `align-items-center`
@@ -49,7 +153,7 @@ PrimeFlex v3 uses **colon-prefixed responsive breakpoints** (e.g., `md:col-6`) i
 - `p-ai-stretch` → `align-items-stretch`
 - `p-align-*` (older alias) → same `align-items-*` mapping
 
-### Flexbox – align self
+**Align self:**
 - `p-as-start` → `align-self-start`
 - `p-as-end` → `align-self-end`
 - `p-as-center` → `align-self-center`
@@ -57,18 +161,17 @@ PrimeFlex v3 uses **colon-prefixed responsive breakpoints** (e.g., `md:col-6`) i
 - `p-as-stretch` → `align-self-stretch`
 - `p-col-align-*` (older alias) → same `align-self-*` mapping
 
-### Flexbox – align content
+**Align content:**
 - `p-ac-start` → `align-content-start`
 - `p-ac-end` → `align-content-end`
 - `p-ac-center` → `align-content-center`
 - `p-ac-between` → `align-content-between`
 - `p-ac-around` → `align-content-around`
 
-### Flexbox – order
+**Order:**
 - `p-order-{n}` → `flex-order-{n}` (0–6)
 
-### Spacing (margin / padding)
-v3 uses `m-{n}`, `mx-{n}`, `my-{n}`, `mt/mr/mb/ml-{n}`, plus `ms-` / `me-` for logical start/end. Same for `p-` padding.
+**Spacing — margin:**
 - `p-m-{n}` → `m-{n}`
 - `p-mx-{n}` → `mx-{n}`
 - `p-my-{n}` → `my-{n}`
@@ -76,12 +179,18 @@ v3 uses `m-{n}`, `mx-{n}`, `my-{n}`, `mt/mr/mb/ml-{n}`, plus `ms-` / `me-` for l
 - `p-mr-{n}` → `mr-{n}`
 - `p-mb-{n}` → `mb-{n}`
 - `p-ml-{n}` → `ml-{n}`
+- Responsive variants: `p-mt-md-3` → `md:mt-3`
+
+**Spacing — padding:**
 - `p-p-{n}` → `p-{n}`
 - `p-px-{n}` → `px-{n}`
 - `p-py-{n}` → `py-{n}`
-- `p-pt/pr/pb/pl-{n}` → `pt/pr/pb/pl-{n}`
+- `p-pt-{n}` → `pt-{n}`
+- `p-pr-{n}` → `pr-{n}`
+- `p-pb-{n}` → `pb-{n}`
+- `p-pl-{n}` → `pl-{n}`
 
-### Text utilities
+**Text utilities:**
 - `p-text-left` → `text-left`
 - `p-text-right` → `text-right`
 - `p-text-center` → `text-center`
@@ -94,36 +203,65 @@ v3 uses `m-{n}`, `mx-{n}`, `my-{n}`, `mt/mr/mb/ml-{n}`, plus `ms-` / `me-` for l
 - `p-text-lowercase` → `lowercase`
 - `p-text-capitalize` → `capitalize`
 
-### Shadows / elevation
-- `p-shadow-{n}` → `shadow-{n}` (1–24 in v2 maps to v3's `shadow-1` through `shadow-8` — verify visually)
+**Shadows:**
+- `p-shadow-{n}` → `shadow-{n}` (verify visually — v2 had 1–24, v3 has 1–8; map approximately and flag for review).
 
-### Form layout
+**Form layout:**
 - `p-formgroup-inline` → `formgroup-inline`
 - `p-field` → `field`
 - `p-field-checkbox` → `field-checkbox`
 - `p-field-radio` → `field-radio`
 - `p-formgrid` → `formgrid`
 
-### Responsive forms
-Same colon-prefix rule: `p-md-6 p-field` → `md:col-6 field` inside `formgrid grid`.
+### Application rules
 
-## Important caveats
+1. Show before/after diffs grouped by file.
+2. Handle multi-class strings: `class="p-grid p-justify-center p-mt-3"` → `class="grid justify-content-center mt-3"`.
+3. Handle `[ngClass]` bindings carefully:
+   - String literals: `[ngClass]="'p-grid'"` → `[ngClass]="'grid'"`
+   - Object syntax: `[ngClass]="{ 'p-grid': cond }"` → `[ngClass]="{ 'grid': cond }"`
+   - Array syntax: `[ngClass]="['p-grid', extra]"` → `[ngClass]="['grid', extra]"`
+4. Handle `[class.xxx]` bindings: `[class.p-grid]="cond"` → `[class.grid]="cond"`.
+5. Update `.scss` / `.css` selectors targeting PrimeFlex v2 utility classes (e.g., `.p-grid { ... }` → `.grid { ... }`), but **only** when the selector targets a PrimeFlex utility, not a PrimeNG component class.
+6. Skip and report ambiguous cases:
+   - `class="flex"` on a non-grid element (likely a valid `display: flex`).
+   - `class="flex-1"` on a flex child (likely a valid `flex-grow: 1`).
+   - Custom app classes that happen to match a pattern.
+   - String-concatenated class bindings constructed at runtime.
 
-1. **Do NOT replace `p-grid` with `flex`** — `flex` is `display: flex` only and loses grid behavior (negative margins, gutters, col children). Use `grid`.
-2. **Column widths use `col-{n}`**, not `flex-{n}`. `flex-{n}` controls `flex-grow`.
-3. **Offsets use `col-offset-{n}`**, not `ms-{n}`. `ms-{n}` uses the spacing scale, not 1/12 grid units.
-4. **Preserve all other attributes** — `[formGroup]`, `formControlName`, `id`, `for`, `(onChange)`, `adminSelenium`, custom directives, etc.
-5. **Don't touch PrimeNG component selectors** (`p-select`, `p-button`, `p-dialog`, etc.) — only utility CSS classes are migrated. The `p-` prefix on Angular components is unrelated.
-6. **Skip non-PrimeFlex classes** that happen to start with `p-` (e.g., custom app classes, third-party libs).
-7. **Handle multi-class strings carefully**: `class="p-grid p-justify-center p-mt-3"` → `class="grid justify-content-center mt-3"`.
-8. **Handle `[ngClass]` bindings** with string literals or object keys.
-9. **Update SCSS/CSS files** that reference these classes as selectors (e.g., `.p-grid { ... }` → `.grid { ... }`), but only if they're targeting PrimeFlex classes, not PrimeNG component classes.
+---
 
-## Process
-1. List all files that contain v2 PrimeFlex classes (grep for `p-grid`, `p-col`, `p-md-`, `p-lg-`, `p-sm-`, `p-xl-`, `p-d-`, `p-jc-`, `p-ai-`, `p-as-`, `p-dir-`, `p-m[trblxy]?-`, `p-p[trblxy]?-`, `p-text-`, `p-shadow-`, `p-field`, `p-formgrid`, `p-formgroup-inline`).
-2. For each file, apply the mappings above.
-3. Report any ambiguous cases (e.g., `p-button` — likely a PrimeNG component, skip) for manual review.
-4. Show me a diff summary grouped by file before committing.
+## Step 5: Verification report
 
-## Verification
-After migration, list any remaining `p-{breakpoint}-` or `p-d-` / `p-jc-` / `p-ai-` patterns that weren't migrated, so I can review them.
+After all changes are reviewed and applied, produce a report containing:
+
+1. **PrimeFlex version** found in `package.json`.
+2. **Import location(s)** for `primeflex.css` and assessment of cascade order.
+3. **PrimeNG components reverted** — list of files where `<fieldset>`, `<button>`, etc. were reverted to their original `<p-...>` tag.
+4. **Incorrect classes fixed** — count of replacements grouped by file (e.g., `flex-md-2` → `md:col-2`, etc.).
+5. **Completed v2 → v3 migrations** — count of replacements grouped by file.
+6. **Manual review queue** — every ambiguous case skipped, with file path, line number, and reason.
+7. **Suggested test pages** — list the top 5–10 files with the most class changes so I can visually verify the layout in the browser.
+
+---
+
+## Step 6: Build check
+
+Run the project build (`npm run build` or `ng build`) and report any compilation, template, or stylelint errors. **Do not auto-fix build errors** — just surface them with file paths and line numbers.
+
+---
+
+## Workflow constraints
+
+- Work on the current feature branch. **Do not commit or push** any changes.
+- For every file, show a diff summary **before** writing changes. Wait for confirmation if more than 20 files would be touched in a single batch — split into smaller batches.
+- If anything is ambiguous, **ask before proceeding**. Visual regressions from a bad PrimeFlex migration are hard to spot in code review.
+- If a file mixes valid v3 classes with leftover v2 classes (a partial migration), fix only the v2 leftovers; do not "tidy up" valid v3 code.
+- Preserve all formatting, indentation, comments (including `<!-- todo refactor ... -->` comments), and unrelated attributes exactly as they are.
+- Preserve all Angular-specific bindings: `[formGroup]`, `formControlName`, `(onChange)`, `(click)`, `*ngIf`, `*ngFor`, `[(ngModel)]`, `adminSelenium`, `id`, `for`, custom directives, etc.
+
+---
+
+## Starting point
+
+Begin with **Step 1** (verify setup) and produce the setup report. Then ask me for confirmation before moving to Step 2. Process steps sequentially with confirmation gates between each — do not auto-advance.
