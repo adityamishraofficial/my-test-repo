@@ -1,62 +1,129 @@
-Now functionality is correct, only the alignment/styling is broken.
+# PrimeFlex v2 → v3 Migration
 
-In PrimeNG v18, utility classes like:
+Migrate all PrimeFlex v2 classes to PrimeFlex v3 syntax across the entire codebase. Scan all `.html`, `.component.html`, `.scss`, `.css`, and `.ts` files (including inline templates and `[ngClass]` / `class` bindings).
 
-flex
-items-center
-gap-4
-ml-2
+## Key syntax change
+PrimeFlex v3 uses **colon-prefixed responsive breakpoints** (e.g., `md:col-6`) instead of v2's dash-suffixed pattern (e.g., `p-md-6`). The `p-` prefix is dropped from most utility classes.
 
-work only if you installed PrimeFlex or another utility CSS library.
+## Class mapping rules
 
-Right now those classes are not applied, so labels are misaligned.
+### Grid system
+- `p-grid` → `grid`
+- `p-col` → `col`
+- `p-col-{n}` → `col-{n}` (n = 1–12, fixed, nogutter, etc.)
+- `p-{breakpoint}-{n}` → `{breakpoint}:col-{n}` (e.g., `p-md-6` → `md:col-6`, `p-lg-4` → `lg:col-4`)
+- `p-col-offset-{n}` → `col-offset-{n}`
+- `p-{breakpoint}-offset-{n}` → `{breakpoint}:col-offset-{n}` (e.g., `p-md-offset-1` → `md:col-offset-1`)
+- `p-col-nogutter` → `col-nogutter`
+- `p-grid-nogutter` → `grid-nogutter`
 
-Add proper CSS manually instead.
+### Flexbox – direction
+- `p-d-flex` → `flex`
+- `p-d-inline-flex` → `inline-flex`
+- `p-d-block` → `block`
+- `p-d-inline` → `inline`
+- `p-d-none` → `hidden`
+- `p-dir-row` → `flex-row`
+- `p-dir-rev` → `flex-row-reverse`
+- `p-dir-col` → `flex-column`
+- `p-dir-col-rev` → `flex-column-reverse`
 
-Use this exact code:
+### Flexbox – wrap
+- `p-flex-wrap` → `flex-wrap`
+- `p-flex-nowrap` → `flex-nowrap`
+- `p-flex-wrap-reverse` → `flex-wrap-reverse`
 
-<div class="radio-group">
-  <div class="radio-item">
-    <p-radioButton
-      name="contractTemplateAvailable"
-      [value]="true"
-      formControlName="contractTemplateAvailable"
-      inputId="contractTemplateAvailableYes">
-    </p-radioButton>
-    <label for="contractTemplateAvailableYes">Yes</label>
-  </div>
-  <div class="radio-item">
-    <p-radioButton
-      name="contractTemplateAvailable"
-      [value]="false"
-      formControlName="contractTemplateAvailable"
-      inputId="contractTemplateAvailableNo">
-    </p-radioButton>
-    <label for="contractTemplateAvailableNo">No</label>
-  </div>
-</div>
+### Flexbox – justify content
+- `p-jc-start` → `justify-content-start`
+- `p-jc-end` → `justify-content-end`
+- `p-jc-center` → `justify-content-center`
+- `p-jc-between` → `justify-content-between`
+- `p-jc-around` → `justify-content-around`
+- `p-jc-evenly` → `justify-content-evenly`
 
-Component SCSS/CSS:
+### Flexbox – align items
+- `p-ai-start` → `align-items-start`
+- `p-ai-end` → `align-items-end`
+- `p-ai-center` → `align-items-center`
+- `p-ai-baseline` → `align-items-baseline`
+- `p-ai-stretch` → `align-items-stretch`
+- `p-align-*` (older alias) → same `align-items-*` mapping
 
-.radio-group {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-.radio-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+### Flexbox – align self
+- `p-as-start` → `align-self-start`
+- `p-as-end` → `align-self-end`
+- `p-as-center` → `align-self-center`
+- `p-as-baseline` → `align-self-baseline`
+- `p-as-stretch` → `align-self-stretch`
+- `p-col-align-*` (older alias) → same `align-self-*` mapping
 
-OR if you want PrimeFlex utilities back like before migration:
+### Flexbox – align content
+- `p-ac-start` → `align-content-start`
+- `p-ac-end` → `align-content-end`
+- `p-ac-center` → `align-content-center`
+- `p-ac-between` → `align-content-between`
+- `p-ac-around` → `align-content-around`
 
-Install:
+### Flexbox – order
+- `p-order-{n}` → `flex-order-{n}` (0–6)
 
-npm install primeflex
+### Spacing (margin / padding)
+v3 uses `m-{n}`, `mx-{n}`, `my-{n}`, `mt/mr/mb/ml-{n}`, plus `ms-` / `me-` for logical start/end. Same for `p-` padding.
+- `p-m-{n}` → `m-{n}`
+- `p-mx-{n}` → `mx-{n}`
+- `p-my-{n}` → `my-{n}`
+- `p-mt-{n}` → `mt-{n}`
+- `p-mr-{n}` → `mr-{n}`
+- `p-mb-{n}` → `mb-{n}`
+- `p-ml-{n}` → `ml-{n}`
+- `p-p-{n}` → `p-{n}`
+- `p-px-{n}` → `px-{n}`
+- `p-py-{n}` → `py-{n}`
+- `p-pt/pr/pb/pl-{n}` → `pt/pr/pb/pl-{n}`
 
-Then add in styles.scss:
+### Text utilities
+- `p-text-left` → `text-left`
+- `p-text-right` → `text-right`
+- `p-text-center` → `text-center`
+- `p-text-justify` → `text-justify`
+- `p-text-nowrap` → `white-space-nowrap`
+- `p-text-bold` → `font-bold`
+- `p-text-normal` → `font-normal`
+- `p-text-italic` → `font-italic`
+- `p-text-uppercase` → `uppercase`
+- `p-text-lowercase` → `lowercase`
+- `p-text-capitalize` → `capitalize`
 
-@import "primeflex/primeflex.css";
+### Shadows / elevation
+- `p-shadow-{n}` → `shadow-{n}` (1–24 in v2 maps to v3's `shadow-1` through `shadow-8` — verify visually)
 
-Then your old utility classes (flex, gap-4, ml-2) will work again properly.
+### Form layout
+- `p-formgroup-inline` → `formgroup-inline`
+- `p-field` → `field`
+- `p-field-checkbox` → `field-checkbox`
+- `p-field-radio` → `field-radio`
+- `p-formgrid` → `formgrid`
+
+### Responsive forms
+Same colon-prefix rule: `p-md-6 p-field` → `md:col-6 field` inside `formgrid grid`.
+
+## Important caveats
+
+1. **Do NOT replace `p-grid` with `flex`** — `flex` is `display: flex` only and loses grid behavior (negative margins, gutters, col children). Use `grid`.
+2. **Column widths use `col-{n}`**, not `flex-{n}`. `flex-{n}` controls `flex-grow`.
+3. **Offsets use `col-offset-{n}`**, not `ms-{n}`. `ms-{n}` uses the spacing scale, not 1/12 grid units.
+4. **Preserve all other attributes** — `[formGroup]`, `formControlName`, `id`, `for`, `(onChange)`, `adminSelenium`, custom directives, etc.
+5. **Don't touch PrimeNG component selectors** (`p-select`, `p-button`, `p-dialog`, etc.) — only utility CSS classes are migrated. The `p-` prefix on Angular components is unrelated.
+6. **Skip non-PrimeFlex classes** that happen to start with `p-` (e.g., custom app classes, third-party libs).
+7. **Handle multi-class strings carefully**: `class="p-grid p-justify-center p-mt-3"` → `class="grid justify-content-center mt-3"`.
+8. **Handle `[ngClass]` bindings** with string literals or object keys.
+9. **Update SCSS/CSS files** that reference these classes as selectors (e.g., `.p-grid { ... }` → `.grid { ... }`), but only if they're targeting PrimeFlex classes, not PrimeNG component classes.
+
+## Process
+1. List all files that contain v2 PrimeFlex classes (grep for `p-grid`, `p-col`, `p-md-`, `p-lg-`, `p-sm-`, `p-xl-`, `p-d-`, `p-jc-`, `p-ai-`, `p-as-`, `p-dir-`, `p-m[trblxy]?-`, `p-p[trblxy]?-`, `p-text-`, `p-shadow-`, `p-field`, `p-formgrid`, `p-formgroup-inline`).
+2. For each file, apply the mappings above.
+3. Report any ambiguous cases (e.g., `p-button` — likely a PrimeNG component, skip) for manual review.
+4. Show me a diff summary grouped by file before committing.
+
+## Verification
+After migration, list any remaining `p-{breakpoint}-` or `p-d-` / `p-jc-` / `p-ai-` patterns that weren't migrated, so I can review them.
