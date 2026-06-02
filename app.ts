@@ -1,47 +1,31 @@
-/* Force the toolbar popup to appear ABOVE the table */
-.tox-pop.tox-pop--bottom {
-  margin-bottom: 8px;
-}
+I have an Angular 18 + PrimeNG 18 project migrated from v17. 
+I need you to update ALL p-checkbox usages in my template files.
 
-.tox-pop.tox-pop--top {
-  margin-top: 8px;
-}
+KEY BREAKING CHANGES in PrimeNG 18 for p-checkbox:
 
-/* Prevent it from overlapping table content */
-.tox .tox-pop {
-  z-index: 1300;
-  position: absolute !important;
-}
+1. The `label` INPUT attribute has been REMOVED.
+   - OLD: <p-checkbox label="Keep original file name" ...></p-checkbox>
+   - NEW: Wrap in a flex div and use an external <label> element:
+     <div class="flex items-center gap-2">
+       <p-checkbox inputId="cbId" ...></p-checkbox>
+       <label for="cbId">Keep original file name</label>
+     </div>
 
-/* Push popup above the element */
-.tox-pop__dialog {
-  transform: translateY(-100%);
-}
+2. `binary` attribute is now a boolean INPUT, not a string:
+   - OLD: binary="true"
+   - NEW: [binary]="true"
 
-option 2:
+3. ngModel binding stays the same:
+   - [(ngModel)]="someBoolean" still works
 
-tinymce.init({
-  selector: '#your-editor',
-  toolbar_location: 'top',   // fixes toolbar at top always
-  inline: false,             // use non-inline mode
-  
-  // OR if you need inline mode:
-  table_toolbar: 
-    'tableprops tabledelete | tableinsertrowbefore tableinsertrowafter ' +
-    'tabledeleterow | tableinsertcolbefore tableinsertcolafter tabledeletecol',
-});
+4. (click) event should be replaced with (onChange):
+   - OLD: (click)="resetNewFilenameToOriginalFilename()"
+   - NEW: (onChange)="resetNewFilenameToOriginalFilename()"
 
-option 3:
-/* Force tox popup to never overlap table rows */
-.tox-silver-sink .tox-pop {
-  top: auto !important;
-  bottom: calc(100% + 10px) !important;
-  transform: none !important;
-}
+5. Make sure CheckboxModule (or standalone p-checkbox) 
+   is imported in your module/component.
 
-.tox-pop--top {
-  inset: auto auto 0 0 !important;
-}
+Here is my template code. Please apply ALL the above fixes 
+to every p-checkbox you find:
 
-
-          
+[PASTE YOUR TEMPLATE CODE HERE]
