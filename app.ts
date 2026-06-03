@@ -1,31 +1,92 @@
-I have an Angular 18 + PrimeNG 18 project migrated from v17. 
-I need you to update ALL p-checkbox usages in my template files.
+The issue is confirmed. listItem and gridItem templates were deprecated and removed in PrimeNG 17+, replaced by list and grid ￼ templates. The key change is that the new template receives the entire items array, not a single item, so you must use *ngFor inside.
 
-KEY BREAKING CHANGES in PrimeNG 18 for p-checkbox:
+Here’s the full fix for your edm-consult-docs.component.html:
 
-1. The `label` INPUT attribute has been REMOVED.
-   - OLD: <p-checkbox label="Keep original file name" ...></p-checkbox>
-   - NEW: Wrap in a flex div and use an external <label> element:
-     <div class="flex items-center gap-2">
-       <p-checkbox inputId="cbId" ...></p-checkbox>
-       <label for="cbId">Keep original file name</label>
-     </div>
+Before (PrimeNG 17 — broken in 18):
 
-2. `binary` attribute is now a boolean INPUT, not a string:
-   - OLD: binary="true"
-   - NEW: [binary]="true"
+<p-dataView [value]="documents" class="edm-files-list" adminSelenium="crud_frm_consultDocs">
+  <p-header>
+    <p class="text-center no-margin">...</p>
+  </p-header>
 
-3. ngModel binding stays the same:
-   - [(ngModel)]="someBoolean" still works
+  <ng-template let-doc pTemplate="listItem">
+    <div class="document-section flex justify-content-around align-items-center p-4">
+      ...
+    </div>
+  </ng-template>
+</p-dataView>
 
-4. (click) event should be replaced with (onChange):
-   - OLD: (click)="resetNewFilenameToOriginalFilename()"
-   - NEW: (onChange)="resetNewFilenameToOriginalFilename()"
 
-5. Make sure CheckboxModule (or standalone p-checkbox) 
-   is imported in your module/component.
+After (PrimeNG 18 — fixed):
 
-Here is my template code. Please apply ALL the above fixes 
-to every p-checkbox you find:
+<p-dataView [value]="documents" class="edm-files-list" adminSelenium="crud_frm_consultDocs">
 
-[PASTE YOUR TEMPLATE CODE HERE]
+  <ng-template pTemplate="header">
+    <p class="text-center no-margin">
+      <span *ngIf="documents.length > 0">
+        <strong>{{documents.length}}</strong>
+        <span> document</span>
+        <span *ngIf="documents.length > 1">s</span>
+      </span>
+      <span *ngIf="documents.length === 0">No documents</span>
+    </p>
+  </ng-template>
+
+  <!-- ✅ "list" instead of "listItem", receives the full array -->
+  <ng-template pTemplate="list" let-items>
+    <div *ngFor="let doc of items">
+      <div class="document-section flex justify-content-around align-items-center p-4">
+
+        <div class="icon text-center" *ngIf="isActiveFile(doc.docState)">
+          <i class="far fa-file-word fa-4x" aria-hidden="true"
+             *ngIf="(doc.fileExt | uppercase) ==='DOC' || (doc.fileExt | uppercase) ==='DOCX'"></i>
+          <i class="far fa-file-excel fa-4x" aria-hidden="true"
+             *ngIf="(doc.fileExt | uppercase)==='XLS' || (doc.fileExt | uppercase) ==='XLSX'"></i>
+          <i class="far fa-file-pdf fa-4x" aria-hidden="true"
+             *ngIf="(doc.fileExt | uppercase) ==='PDF' || (doc.fileExt | uppercase) ==='DPDF'"></i>
+          <i class="far fa-file-image fa-4x" aria-hidden="true"
+             *ngIf="isImageFile(doc.fileExt)"></i>
+        </div>
+
+        <div class="icon text-center" *ngIf="isScanFile(doc.docState)">
+          <i class="far fa-file-alt fa-4x" aria-hidden="true"></i>
+          <br>
+          <span [ngClass]="doc.docState.name">{{doc.docState.value}}</span>
+        </div>
+
+        <div class="details">
+          <dl class="flex flex-wrap">
+            <dt>Filename: </dt>
+            <dd class="p-text-bold">
+              <a (click)="downloadFile(doc)" adminSelenium="crud_lnk_downloadFile">{{doc.fileName}}</a>
+            </dd>
+            <dt>Type: </dt>
+            <dd>{{doc.fileExt}}</dd>
+            <dt>Creation date: </dt>
+            <dd>{{doc.uploadDate | date:'mediumDate'}}</dd>
+            <dt>Author: </dt>
+            <dd>{{doc.createdBy}}</dd>
+            <dt>Typology: </dt>
+            <dd><span *ngIf="doc.documentTypology">{{doc.documentTypology.label}}</span></dd>
+            <dt>Comment: </dt>
+            <dd>{{doc.comment}}</dd>
+          </dl>
+        </div>
+
+      </div>
+    </div>
+  </ng-template>
+
+</p-dataView>
+
+
+Key changes summary:
+
+|What changed    |Old (v17)              |New (v18)                         |
+|----------------|-----------------------|----------------------------------|
+|Template name   |`pTemplate="listItem"` |`pTemplate="list"`                |
+|Variable binding|`let-doc` (single item)|`let-items` (full array)          |
+|Iteration       |Handled automatically  |Manual `*ngFor="let doc of items"`|
+|Header tag      |`<p-header>`           |`<ng-template pTemplate="header">`|
+
+The <p-header> component was also deprecated — replace it with <ng-template pTemplate="header"> to be safe in v18.
