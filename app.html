@@ -1,58 +1,142 @@
-I have Angular 18 + PrimeNG 18 migrated from v17.
-My grid layout is completely broken — elements have 0px height.
+You are a PrimeNG v17 to v18 migration expert. 
+Your task is to find and replace deprecated PrimeNG grid CSS 
+classes with PrimeFlex equivalents in Angular HTML templates.
 
-The issue is I'm using OLD PrimeFlex v2 grid classes which 
-no longer work. PrimeNG 18 requires PrimeFlex v3 class names.
+## RULES:
+- Only modify class attributes in HTML templates (.html files)
+- Do NOT change TypeScript, SCSS, or logic
+- Preserve all other existing classes on the element
+- Do NOT add or remove HTML elements
 
-FIRST: Make sure PrimeFlex v3 is installed and imported:
-  npm install primeflex
-  In styles.scss or angular.json add:
-  @import 'primeflex/primeflex.css'  (or primeflex.min.css)
+## REPLACEMENT MAP (apply ALL of these):
 
-GRID CLASS MIGRATION - Replace ALL occurrences:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CONTAINER:
-  OLD: class="p-grid"            → NEW: class="grid"
-  OLD: class="p-grid p-nogutter" → NEW: class="grid gap-0"
-  OLD: class="p-fluid"           → NEW: class="w-full"
+### Grid Container:
+- "p-grid"               → "grid"
+- "p-grid p-nogutter"    → "grid p-0"
+- "p-grid p-fluid"       → "grid"  (add fluid to p-fluid component instead)
 
-COLUMNS (replace all numbers 1-12):
-  OLD: class="p-col-6"    → NEW: class="col-6"
-  OLD: class="p-col"      → NEW: class="col"
-  OLD: class="p-md-2"     → NEW: class="col-12 md:col-2"
-  OLD: class="p-md-3"     → NEW: class="col-12 md:col-3"
-  OLD: class="p-md-4"     → NEW: class="col-12 md:col-4"
-  OLD: class="p-md-6"     → NEW: class="col-12 md:col-6"
-  OLD: class="p-lg-3"     → NEW: class="col-12 lg:col-3"
-  OLD: class="p-sm-12"    → NEW: class="col-12"
+### Columns (replace p-col-N with col-N):
+- "p-col-1"  → "col-1"
+- "p-col-2"  → "col-2"
+- "p-col-3"  → "col-3"
+- "p-col-4"  → "col-4"
+- "p-col-5"  → "col-5"
+- "p-col-6"  → "col-6"
+- "p-col-7"  → "col-7"
+- "p-col-8"  → "col-8"
+- "p-col-9"  → "col-9"
+- "p-col-10" → "col-10"
+- "p-col-11" → "col-11"
+- "p-col-12" → "col-12"
 
-OFFSETS:
-  OLD: class="p-md-offset-1" → NEW: class="md:col-offset-1"
-  OLD: class="p-md-offset-2" → NEW: class="md:col-offset-2"
-  OLD: class="p-offset-1"    → NEW: class="col-offset-1"
+### Responsive Breakpoints:
+- "p-sm-N"  → "col-12 sm:col-N"
+- "p-md-N"  → "col-12 md:col-N"
+- "p-lg-N"  → "col-12 lg:col-N"
+- "p-xl-N"  → "col-12 xl:col-N"
 
-COMBINED (very common pattern):
-  OLD: class="p-md-2 p-md-offset-1"
-  NEW: class="col-12 md:col-2 md:col-offset-1"
+### Offsets:
+- "p-col-offset-N"  → "col-offset-N"
+- "p-md-offset-N"   → "md:col-offset-N"
+- "p-lg-offset-N"   → "lg:col-offset-N"
 
-ALIGNMENT:
-  OLD: class="p-justify-center" → NEW: class="justify-content-center"
-  OLD: class="p-align-center"   → NEW: class="align-items-center"
-  OLD: class="p-dir-col"        → NEW: class="flex-column"
+### Spacing (Padding):
+- "p-p-0"   → "p-0"
+- "p-p-1"   → "p-1"
+- "p-p-2"   → "p-2"
+- "p-p-3"   → "p-3"
+- "p-px-N"  → "px-N"
+- "p-py-N"  → "py-N"
+- "p-pt-N"  → "pt-N"
+- "p-pb-N"  → "pb-N"
+- "p-pl-N"  → "pl-N"
+- "p-pr-N"  → "pr-N"
 
-FORM SPECIFIC:
-  OLD: class="p-field"          → NEW: class="field"
-  OLD: class="p-formgroup-inline" → NEW: class="formgroup-inline"
-  OLD: class="p-field-checkbox"   → NEW: class="field-checkbox"
-  OLD: class="p-field-radiobutton" → NEW: class="field-radiobutton"
+### Spacing (Margin):
+- "p-m-0"   → "m-0"
+- "p-m-1"   → "m-1"
+- "p-m-2"   → "m-2"
+- "p-m-3"   → "m-3"
+- "p-mx-N"  → "mx-N"
+- "p-my-N"  → "my-N"
+- "p-mt-N"  → "mt-N"
+- "p-mb-N"  → "mb-N"
+- "p-ml-N"  → "ml-N"
+- "p-mr-N"  → "mr-N"
 
-SPACING (if used alongside grid):
-  OLD: class="p-mt-2"  → NEW: class="mt-2"
-  OLD: class="p-mb-2"  → NEW: class="mb-2"
-  OLD: class="p-ml-2"  → NEW: class="ml-2"
-  OLD: class="p-mr-2"  → NEW: class="mr-2"
-  OLD: class="p-p-2"   → NEW: class="p-2"
-  OLD: class="p-px-2"  → NEW: class="px-2"
+### Flexbox:
+- "p-d-flex"           → "flex"
+- "p-d-inline-flex"    → "inline-flex"
+- "p-jc-start"         → "justify-content-start"
+- "p-jc-end"           → "justify-content-end"
+- "p-jc-center"        → "justify-content-center"
+- "p-jc-between"       → "justify-content-between"
+- "p-jc-around"        → "justify-content-around"
+- "p-ai-start"         → "align-items-start"
+- "p-ai-end"           → "align-items-end"
+- "p-ai-center"        → "align-items-center"
+- "p-ai-stretch"       → "align-items-stretch"
+- "p-flex-row"         → "flex-row"
+- "p-flex-column"      → "flex-column"
+- "p-flex-wrap"        → "flex-wrap"
+- "p-flex-nowrap"      → "flex-nowrap"
+- "p-flex-1"           → "flex-1"
 
-Now apply all these replacements to my template:
-[PASTE YOUR TEMPLATE CODE HERE]
+### Display:
+- "p-d-none"           → "hidden"
+- "p-d-block"          → "block"
+- "p-d-inline"         → "inline"
+
+### Text:
+- "p-text-left"        → "text-left"
+- "p-text-right"       → "text-right"
+- "p-text-center"      → "text-center"
+- "p-text-bold"        → "font-bold"
+- "p-text-italic"      → "font-italic"
+- "p-text-capitalize"  → "capitalize"
+- "p-text-uppercase"   → "uppercase"
+- "p-text-lowercase"   → "lowercase"
+- "p-text-nowrap"      → "white-space-nowrap"
+
+### Width / Height:
+- "p-w-full"  → "w-full"
+- "p-h-full"  → "h-full"
+
+## INPUT:
+[PASTE YOUR HTML TEMPLATE CODE HERE]
+
+## OUTPUT FORMAT:
+1. Return the full updated HTML
+2. After the code, list every change made as:
+   - Line N: "old class" → "new class"
+3. Flag any class you were UNCERTAIN about with ⚠️
+
+## EXAMPLE:
+Input:
+<div class="p-grid p-nogutter">
+  <div class="p-md-2 p-md-offset-1 p-text-center">
+    <label>Name</label>
+  </div>
+  <div class="p-md-3 p-d-flex p-ai-center">
+    <input />
+  </div>
+</div>
+
+Output:
+<div class="grid p-0">
+  <div class="col-12 md:col-2 md:col-offset-1 text-center">
+    <label>Name</label>
+  </div>
+  <div class="col-12 md:col-3 flex align-items-center">
+    <input />
+  </div>
+</div>
+
+Changes:
+- Line 1: "p-grid p-nogutter" → "grid p-0"
+- Line 2: "p-md-2"        → "col-12 md:col-2"
+- Line 2: "p-md-offset-1" → "md:col-offset-1"
+- Line 2: "p-text-center" → "text-center"
+- Line 5: "p-md-3"        → "col-12 md:col-3"
+- Line 5: "p-d-flex"      → "flex"
+- Line 5: "p-ai-center"   → "align-items-center"
