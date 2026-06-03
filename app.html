@@ -1,99 +1,58 @@
-I have Angular 18 + PrimeNG 18 (migrated from v17).
-I have these deprecation warnings in my console:
-1. OverlayPanel is deprecated → use Popover
-2. AccordionTab is deprecated → use new structure  
-3. Calendar is deprecated → use DatePicker
+I have Angular 18 + PrimeNG 18 migrated from v17.
+My grid layout is completely broken — elements have 0px height.
 
-Please fix ALL occurrences in my project using these migration rules:
+The issue is I'm using OLD PrimeFlex v2 grid classes which 
+no longer work. PrimeNG 18 requires PrimeFlex v3 class names.
 
+FIRST: Make sure PrimeFlex v3 is installed and imported:
+  npm install primeflex
+  In styles.scss or angular.json add:
+  @import 'primeflex/primeflex.css'  (or primeflex.min.css)
+
+GRID CLASS MIGRATION - Replace ALL occurrences:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. OVERLAYPANEL → POPOVER
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-OLD template:
-<p-overlayPanel #op>
-  content here
-</p-overlayPanel>
-<button (click)="op.toggle($event)">Open</button>
+CONTAINER:
+  OLD: class="p-grid"            → NEW: class="grid"
+  OLD: class="p-grid p-nogutter" → NEW: class="grid gap-0"
+  OLD: class="p-fluid"           → NEW: class="w-full"
 
-NEW template:
-<p-popover #op>
-  content here
-</p-popover>
-<button (click)="op.toggle($event)">Open</button>
+COLUMNS (replace all numbers 1-12):
+  OLD: class="p-col-6"    → NEW: class="col-6"
+  OLD: class="p-col"      → NEW: class="col"
+  OLD: class="p-md-2"     → NEW: class="col-12 md:col-2"
+  OLD: class="p-md-3"     → NEW: class="col-12 md:col-3"
+  OLD: class="p-md-4"     → NEW: class="col-12 md:col-4"
+  OLD: class="p-md-6"     → NEW: class="col-12 md:col-6"
+  OLD: class="p-lg-3"     → NEW: class="col-12 lg:col-3"
+  OLD: class="p-sm-12"    → NEW: class="col-12"
 
-OLD import:  OverlayPanelModule from 'primeng/overlaypanel'
-NEW import:  PopoverModule from 'primeng/popover'
+OFFSETS:
+  OLD: class="p-md-offset-1" → NEW: class="md:col-offset-1"
+  OLD: class="p-md-offset-2" → NEW: class="md:col-offset-2"
+  OLD: class="p-offset-1"    → NEW: class="col-offset-1"
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-2. ACCORDIONTAB → NEW ACCORDION STRUCTURE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-OLD template:
-<p-accordion>
-  <p-accordionTab header="Title 1" [selected]="true">
-    Content 1
-  </p-accordionTab>
-  <p-accordionTab header="Title 2" [disabled]="true">
-    Content 2
-  </p-accordionTab>
-</p-accordion>
+COMBINED (very common pattern):
+  OLD: class="p-md-2 p-md-offset-1"
+  NEW: class="col-12 md:col-2 md:col-offset-1"
 
-NEW template:
-<p-accordion [value]="['0']" [multiple]="true">
-  <p-accordion-panel value="0">
-    <p-accordion-header>Title 1</p-accordion-header>
-    <p-accordion-content>
-      Content 1
-    </p-accordion-content>
-  </p-accordion-panel>
-  <p-accordion-panel value="1" [disabled]="true">
-    <p-accordion-header>Title 2</p-accordion-header>
-    <p-accordion-content>
-      Content 2
-    </p-accordion-content>
-  </p-accordion-panel>
-</p-accordion>
+ALIGNMENT:
+  OLD: class="p-justify-center" → NEW: class="justify-content-center"
+  OLD: class="p-align-center"   → NEW: class="align-items-center"
+  OLD: class="p-dir-col"        → NEW: class="flex-column"
 
-KEY CHANGES for Accordion:
-- p-accordionTab → p-accordion-panel + p-accordion-header 
-  + p-accordion-content
-- header="..." attribute → <p-accordion-header> child component
-- [selected]="true" → set value on panel + [value]="['0']" on parent
-- (onOpen)/(onClose) events → (openChange) on p-accordion-panel
-- Import stays: AccordionModule from 'primeng/accordion'
+FORM SPECIFIC:
+  OLD: class="p-field"          → NEW: class="field"
+  OLD: class="p-formgroup-inline" → NEW: class="formgroup-inline"
+  OLD: class="p-field-checkbox"   → NEW: class="field-checkbox"
+  OLD: class="p-field-radiobutton" → NEW: class="field-radiobutton"
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-3. CALENDAR → DATEPICKER
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-OLD template:
-<p-calendar 
-  [(ngModel)]="date"
-  dateFormat="dd/mm/yy"
-  [showTime]="true"
-  [showIcon]="true"
-  placeholder="Select date">
-</p-calendar>
+SPACING (if used alongside grid):
+  OLD: class="p-mt-2"  → NEW: class="mt-2"
+  OLD: class="p-mb-2"  → NEW: class="mb-2"
+  OLD: class="p-ml-2"  → NEW: class="ml-2"
+  OLD: class="p-mr-2"  → NEW: class="mr-2"
+  OLD: class="p-p-2"   → NEW: class="p-2"
+  OLD: class="p-px-2"  → NEW: class="px-2"
 
-NEW template:
-<p-datepicker
-  [(ngModel)]="date"
-  dateFormat="dd/mm/yy"
-  [showTime]="true"
-  [showIcon]="true"
-  placeholder="Select date">
-</p-datepicker>
-
-OLD import:  CalendarModule from 'primeng/calendar'
-NEW import:  DatePickerModule from 'primeng/datepicker'
-
-NOTE: All @Input() properties stay the same,
-only the selector and module name changed.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ALSO UPDATE all module/component imports[] arrays:
-- Remove: OverlayPanelModule, CalendarModule
-- Add: PopoverModule, DatePickerModule
-- AccordionModule stays the same
-
-Now apply all fixes to my code:
-[PASTE YOUR TEMPLATE FILES HERE]
-[PASTE YOUR MODULE/COMPONENT TS FILES HERE]
+Now apply all these replacements to my template:
+[PASTE YOUR TEMPLATE CODE HERE]
