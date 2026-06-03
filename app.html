@@ -1,87 +1,99 @@
-<main class="workspace">
-  <section class="hero">
-    <p class="eyebrow">TinyMCE + Export HTML</p>
-    <h1>Multi-level ordered list editor for DOCX and PDF preview</h1>
-    <p class="intro">
-      TinyMCE keeps the source HTML semantic with nested <code>ol</code> and
-      <code>li</code> elements. Preview and export are generated from that source so the
-      numbering stays identical in the editor, iframe preview, and backend document flow.
-    </p>
+I have Angular 18 + PrimeNG 18 (migrated from v17).
+I have these deprecation warnings in my console:
+1. OverlayPanel is deprecated → use Popover
+2. AccordionTab is deprecated → use new structure  
+3. Calendar is deprecated → use DatePicker
 
-    <div class="actions">
-      <button type="button" class="primary" (click)="resetSample()">Reset sample</button>
-      <button type="button" class="secondary" (click)="copyExportHtml()">
-        {{ copyLabel() }}
-      </button>
-      <span class="status">{{ status() }}</span>
-    </div>
-  </section>
+Please fix ALL occurrences in my project using these migration rules:
 
-  <section class="grid">
-    <article class="panel editor-panel">
-      <div class="panel-header">
-        <h2>Editor</h2>
-        <p>Tab and Shift+Tab indent and outdent real nested list items.</p>
-      </div>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. OVERLAYPANEL → POPOVER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OLD template:
+<p-overlayPanel #op>
+  content here
+</p-overlayPanel>
+<button (click)="op.toggle($event)">Open</button>
 
-      <textarea #editorHost class="editor-host"></textarea>
-    </article>
+NEW template:
+<p-popover #op>
+  content here
+</p-popover>
+<button (click)="op.toggle($event)">Open</button>
 
-    <article class="panel preview-panel">
-      <div class="panel-header">
-        <h2>Iframe Preview</h2>
-        <p>Rendered from semantic HTML using explicit hierarchical numbering.</p>
-      </div>
+OLD import:  OverlayPanelModule from 'primeng/overlaypanel'
+NEW import:  PopoverModule from 'primeng/popover'
 
-      <iframe
-        class="preview-frame"
-        title="Document preview"
-        [srcdoc]="previewFrameHtml()"
-      ></iframe>
-    </article>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. ACCORDIONTAB → NEW ACCORDION STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OLD template:
+<p-accordion>
+  <p-accordionTab header="Title 1" [selected]="true">
+    Content 1
+  </p-accordionTab>
+  <p-accordionTab header="Title 2" [disabled]="true">
+    Content 2
+  </p-accordionTab>
+</p-accordion>
 
-    <article class="panel export-panel">
-      <div class="panel-header">
-        <h2>Preview Body HTML</h2>
-        <p>Send only this body content to your preview or DOCX/PDF backend API.</p>
+NEW template:
+<p-accordion [value]="['0']" [multiple]="true">
+  <p-accordion-panel value="0">
+    <p-accordion-header>Title 1</p-accordion-header>
+    <p-accordion-content>
+      Content 1
+    </p-accordion-content>
+  </p-accordion-panel>
+  <p-accordion-panel value="1" [disabled]="true">
+    <p-accordion-header>Title 2</p-accordion-header>
+    <p-accordion-content>
+      Content 2
+    </p-accordion-content>
+  </p-accordion-panel>
+</p-accordion>
 
-        <div class="panel-actions">
-          <button type="button" class="secondary" (click)="loadPreviewBodyIntoEditor()">
-            Load into TinyMCE
-          </button>
-        </div>
-      </div>
+KEY CHANGES for Accordion:
+- p-accordionTab → p-accordion-panel + p-accordion-header 
+  + p-accordion-content
+- header="..." attribute → <p-accordion-header> child component
+- [selected]="true" → set value on panel + [value]="['0']" on parent
+- (onOpen)/(onClose) events → (openChange) on p-accordion-panel
+- Import stays: AccordionModule from 'primeng/accordion'
 
-      <pre class="code-view">{{ exportHtml() }}</pre>
-    </article>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. CALENDAR → DATEPICKER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OLD template:
+<p-calendar 
+  [(ngModel)]="date"
+  dateFormat="dd/mm/yy"
+  [showTime]="true"
+  [showIcon]="true"
+  placeholder="Select date">
+</p-calendar>
 
-    <article class="panel export-panel patch-panel">
-      <div class="panel-header">
-        <h2>Patch Value</h2>
-        <p>Paste any Preview Body HTML here and patch it into TinyMCE edit mode.</p>
+NEW template:
+<p-datepicker
+  [(ngModel)]="date"
+  dateFormat="dd/mm/yy"
+  [showTime]="true"
+  [showIcon]="true"
+  placeholder="Select date">
+</p-datepicker>
 
-        <div class="panel-actions">
-          <button type="button" class="secondary" (click)="patchValueIntoEditor()">
-            Patch to TinyMCE
-          </button>
-        </div>
-      </div>
+OLD import:  CalendarModule from 'primeng/calendar'
+NEW import:  DatePickerModule from 'primeng/datepicker'
 
-      <textarea
-        class="patch-input"
-        placeholder="Paste Preview Body HTML here, then click Patch to TinyMCE"
-        [value]="patchValue()"
-        (input)="updatePatchValue($any($event.target).value)"
-      ></textarea>
-    </article>
+NOTE: All @Input() properties stay the same,
+only the selector and module name changed.
 
-    <article class="panel export-panel">
-      <div class="panel-header">
-        <h2>Saved Semantic HTML</h2>
-        <p>This is the canonical TinyMCE content to persist in your database.</p>
-      </div>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ALSO UPDATE all module/component imports[] arrays:
+- Remove: OverlayPanelModule, CalendarModule
+- Add: PopoverModule, DatePickerModule
+- AccordionModule stays the same
 
-      <pre class="code-view">{{ rawHtml() }}</pre>
-    </article>
-  </section>
-</main>
+Now apply all fixes to my code:
+[PASTE YOUR TEMPLATE FILES HERE]
+[PASTE YOUR MODULE/COMPONENT TS FILES HERE]
