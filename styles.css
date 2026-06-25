@@ -1,13 +1,249 @@
-html,
-body {
-  margin: 0;
-  min-height: 100%;
-}
+From your screenshots, I can see you’re currently on roughly:
 
-body {
-  background: #0f172a;
-}
+* Angular: 18.2.14
+* PrimeNG: 18.0.2
+* PrimeIcons: 6.0.1
+* TypeScript: 5.4.5
+* Zone.js: 0.14.10
+* Several Angular ESLint packages on 18.x
 
-* {
-  box-sizing: border-box;
-}
+Before upgrading, tell me what target version you want:
+
+1. Upgrade to latest Angular 19
+2. Upgrade to Angular 20 (latest major)
+3. Only upgrade PrimeNG + dependencies
+4. Full project upgrade (Angular + PrimeNG + all tooling)
+
+Assuming you want a full upgrade (recommended), here is the safest step-by-step.
+
+⸻
+
+Step 0 — Create backup branch
+
+git checkout -b upgrade-backup
+git add .
+git commit -m "backup before upgrade"
+
+⸻
+
+Step 1 — Check current Angular status
+
+Run:
+
+ng version
+
+Verify all packages are on 18.x.
+
+⸻
+
+Step 2 — Clean project first
+
+Delete old dependencies.
+
+Windows:
+
+rmdir /s /q node_modules
+del package-lock.json
+
+Mac/Linux:
+
+rm -rf node_modules package-lock.json
+
+Clear npm cache:
+
+npm cache clean --force
+
+⸻
+
+Step 3 — Upgrade Angular CLI globally
+
+npm uninstall -g @angular/cli
+npm install -g @angular/cli@latest
+
+Check:
+
+ng version
+
+⸻
+
+Step 4 — Upgrade Angular core packages
+
+If moving 18 → 19
+
+ng update @angular/core@19 @angular/cli@19
+
+If moving 18 → 20
+
+Do NOT jump directly.
+
+First:
+
+ng update @angular/core@19 @angular/cli@19
+
+Then:
+
+ng update @angular/core@20 @angular/cli@20
+
+⸻
+
+Step 5 — Upgrade TypeScript
+
+Check compatibility.
+
+For Angular 19:
+
+npm install typescript@5.5 --save-dev
+
+For Angular 20:
+
+npm install typescript@latest --save-dev
+
+⸻
+
+Step 6 — Upgrade PrimeNG
+
+Current:
+
+"primeng": "^18.0.2"
+
+Upgrade:
+
+For Angular 19:
+
+npm install primeng@19 primeicons@latest
+
+For Angular 20:
+
+npm install primeng@latest primeicons@latest
+
+Check compatibility at:
+
+PrimeNG Docs⁠￼
+
+⸻
+
+Step 7 — Upgrade ESLint packages
+
+You have:
+
+@angular-eslint/*
+
+Upgrade:
+
+npm install @angular-eslint/eslint-plugin@latest --save-dev
+npm install @angular-eslint/eslint-plugin-template@latest --save-dev
+npm install @angular-eslint/template-parser@latest --save-dev
+npm install @angular-eslint/builder@latest --save-dev
+
+Or:
+
+ng update angular-eslint
+
+⸻
+
+Step 8 — Upgrade RxJS
+
+Current:
+
+rxjs ^7.8.1
+
+Upgrade:
+
+npm install rxjs@latest
+
+⸻
+
+Step 9 — Check incompatible libraries
+
+I noticed:
+
+angular2-multiselect-dropdown
+ngx-translate/core
+fortawesome packages
+
+Check each:
+
+angular2-multiselect-dropdown
+
+This library is old.
+
+Check:
+
+npm outdated
+
+If broken after upgrade, replace it.
+
+⸻
+
+Step 10 — Install everything fresh
+
+npm install
+
+⸻
+
+Step 11 — Check peer dependency issues
+
+Run:
+
+npm ls
+
+If errors:
+
+npm install --legacy-peer-deps
+
+(only if needed)
+
+⸻
+
+Step 12 — Run app
+
+ng serve
+
+Fix compile errors one by one.
+
+⸻
+
+Step 13 — Run migration
+
+ng update
+
+Check remaining packages.
+
+Official guide:
+
+Angular Update Guide⁠￼
+
+⸻
+
+Step 14 — Run tests
+
+ng test
+ng lint
+
+⸻
+
+Packages I’m worried about in your package.json
+
+Check these carefully:
+
+⚠ angular2-multiselect-dropdown → likely outdated
+⚠ jest-preset-angular 14.1.0 → may break
+⚠ ng-packagr 18.2.0 → version mismatch after upgrade
+⚠ @ngx-translate/core → verify compatibility
+⚠ font-awesome 4.7.0 → old
+
+⸻
+
+My suggestion based on your project
+
+Because this looks like a large Angular library/workspace (ng-wings), I would do:
+
+18 → 19 first
+Stabilize
+Then 19 → 20
+
+Do not jump directly.
+
+⸻
+
+If you share the full package.json file (paste it here), I can check exactly which dependencies will break during upgrade.
