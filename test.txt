@@ -1,42 +1,29 @@
-Save behavior
+.dialog-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    padding: 0.5rem 0;
+}
 
-On save:
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
 
-* Update the actual selected table DOM element inside TinyMCE.
-* Set/remove attributes accordingly.
-* Preserve existing table structure, rows, columns, styles, classes, width, borders, etc.
-* Only modify these custom attributes.
+.field label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+}
 
-I want to implement a custom table configuration popup on double-click of a table inside the editor.
+.w-full {
+    width: 100%;
+}
 
-Requirement
-
-When a user double-clicks on a table in TinyMCE:
-
-1. Open a custom popup / dialog.
-2. In that popup show a dropdown:
-    * Table Type
-        * Static
-        * Dynamic
-3. If the user selects Dynamic, then show another dropdown:
-    * Entity Type
-        * (configurable list; for now use sample values like customer, invoice, product, employee)
-4. When the user clicks Save / Apply:
-    * Update the selected table element in the TinyMCE content.
-    * Add custom attributes to the <table> tag:
-        * table-type="static" or table-type="dynamic"
-        * if dynamic is selected, also add table-entity-type="selectedEntityType"
-
-
-<table table-type="dynamic" table-entity-type="customer">
-  ...
-</table>
-
-
-
-Show Table Type dropdown always.
-* Show Entity Type dropdown only when table type = dynamic.
-* If table type is changed from dynamic to static, remove the table-entity-type attribute.
-
-
-
+.dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    width: 100%;
+}
