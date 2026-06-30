@@ -1,29 +1,19 @@
-.dialog-form {
-    display: flex;
-    flex-direction: column;
-    gap: 1.25rem;
-    padding: 0.5rem 0;
-}
+previousValue: string[] = [];
 
-.field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
+handleChange(newValue: string[]) {
 
-.field label {
-    font-size: 14px;
-    font-weight: 600;
-    color: #374151;
-}
+  // chip added
 
-.w-full {
-    width: 100%;
-}
+  if (newValue?.length > this.previousValue.length) {
 
-.dialog-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.75rem;
-    width: 100%;
+    const addedChip = newValue[newValue.length - 1];
+
+    this.add.emit(addedChip);
+
+  }
+
+  // update previous state
+
+  this.previousValue = [...(newValue || [])];
+
 }
