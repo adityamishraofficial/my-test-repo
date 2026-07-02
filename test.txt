@@ -1,19 +1,33 @@
-previousValue: string[] = [];
+Implement a “Continue Numbered List” feature in my TinyMCE editor.
 
-handleChange(newValue: string[]) {
+When a user creates a numbered list (ordered list), adds a normal paragraph or plain text outside the list, and later clicks a “Continue List” option, the editor should resume numbering from the previous list item instead of starting again from 1.
 
-  // chip added
 
-  if (newValue?.length > this.previousValue.length) {
+Current content:
+1. First item
+1. Second item
+Some paragraph text here.
+1. Third item < should continue from previous list
+Expected behavior:
+• Detect the last ordered list before the cursor position.
+• Find its last list number.
+• Create a new ordered list with start = lastNumber + 1.
+• Preserve nested numbering if possible (1.1, 1.2, 2.1, etc.).
+• Work with TinyMCE 6/7 and Angular integration.
+• Add a toolbar button named
+Continue List.
 
-    const addedChip = newValue[newValue.length - 1];
 
-    this.add.emit(addedChip);
+Technical details:
+• Use TinyMCE editor APIs (editor.selection, editor.dom, editor.insertContent, etc.).
+• Handle cases where multiple ordered lists exist in the document.
+• Resume numbering based on the nearest previous ordered list.
+• Provide complete Angular + TinyMCE code including toolbar configuration and the custom plugin/button implementation.
+Also include:
+• Edge case handling
+• Nested list continuation logic
+• Example HTML input/output
+• Step-by-step explanation of how the numbering is calculated
 
-  }
 
-  // update previous state
 
-  this.previousValue = [...(newValue || [])];
-
-}
