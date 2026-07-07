@@ -1,26 +1,26 @@
-You're in decent shape — it's one major hop, and Angular only lets you do one major at a time anyway. Order matters here:
+Migrate all SCSS in this Angular 19 project to be Dart Sass 3.0 compatible. The app builds fine but emits Sass deprecation warnings that must be eliminated with zero visual/CSS output changes.
 
-**Prep**
-1. Commit everything on a fresh branch (`ng update` refuses on a dirty tree). Check `node -v` — Angular 19 needs Node ≥18.19.1, 20.11+, or 22.
-2. **Check your blockers first:** `ng-wings` (pinned at 18.0.5) and `wings-i18n` look like internal libs versioned to the Angular major. Confirm a 19-compatible build exists in your registry before anything else, or you'll stall mid-upgrade.
+Scope: all .scss files under src/. Never touch node_modules.
 
-**Core**
+PART 1 — Deprecated color functions
+- Replace across all files:
+  - darken($c, X%)  → color.adjust($c, $lightness: -X%)
+  - lighten($c, X%) → color.adjust($c, $lightness: X%)
+  - desaturate/saturate($c, X%) → color.adjust($c, $saturation: ∓X%)
+  - transparentize/fade-out($c, X) → color.adjust($c, $alpha: -X)
+  - opacify/fade-in($c, X) → color.adjust($c, $alpha: X)
+- Only replace Sass function calls — do NOT touch CSS filter values like `filter: saturate(1.2)`.
+- Every file using color.adjust must start with `@use 'sass:color';` (@use must precede all other rules).
 
-3. `ng update @angular/core@19 @angular/cli@19` — updates all @angular/* packages, zone.js to 0.15, TypeScript to ≥5.5, and runs migrations. Expect a big diff: every NgModule-declared component/directive/pipe gets an explicit `standalone: false` (standalone is the default in v19). That's normal. Commit.
-4. `ng update @angular/cdk@19` — commit.
+PART 2 — @import → @use/@forward
+- First check angular.json for stylePreprocessorOptions.includePaths.
+- Run the official migrator, passing each includePath as a load path:
+  npx sass-migrator module --migrate-deps --load-path=<each-include-path> src/styles.scss 'src/app/**/*.scss'
+- If the glob doesn't expand, enumerate the files explicitly.
+- After migration, fix leftovers: namespaced variables (e.g. $primary → vars.$primary), and use `@use '...' as *` for intentionally-global partials like common-variables so existing unprefixed variables keep working.
 
-**Ecosystem**
+PART 3 — Verify
+- Run ng build: it must finish with ZERO Sass deprecation warnings and no new errors.
+- Fix code properly — do not silence warnings via angular.json.
 
-5. NgRx: `ng update @ngrx/store@19 @ngrx/effects@19 @ngrx/router-store@19 @ngrx/component-store@19 @ngrx/store-devtools@19 @ngrx/schematics@19`
-6. Lint: `ng update @angular-eslint/schematics@19`, then `npm i -D @typescript-eslint/eslint-plugin@8 @typescript-eslint/parser@8` (angular-eslint 19 needs typescript-eslint 8; your eslint 8.57 is still fine).
-7. Jest: `npm i -D @angular-builders/jest@19` (your jest-preset-angular 14.6 already supports v19).
-8. FontAwesome: `npm i @fortawesome/angular-fontawesome@1` — 0.15 is Angular-18-only; 1.0 is the v19 release.
-9. PrimeNG: v18 also declares Angular 19 support, so it can stay for now. To align majors: `npm i primeng@19 @primeng/themes@19` (no theming rewrite this time, unlike 17→18). ngx-translate v16 already supports 19 — leave it.
-
-**Verify**
-
-10. Fresh install, then `ng build`, `ng lint`, and your test script. Smoke-test the app.
-
-Likely trouble spot: `angular2-multiselect-dropdown` is a legacy lib — if npm throws peer-dependency errors, that's the culprit. Since you already have PrimeNG, its MultiSelect is a cleaner replacement; `--legacy-peer-deps` only as a last resort.
-
-Version numbers above are from memory as of early 2026 — cross-check update.angular.dev (select 18→19) for anything specific to your setup.
+Make two commits: (1) color function replacements, (2) module migration.
