@@ -1,31 +1,26 @@
-You're on 18.2.14, so it's a single major jump. Steps:
+You're in decent shape — it's one major hop, and Angular only lets you do one major at a time anyway. Order matters here:
 
-1. **Prereqs**: Node `^18.19.1`, `^20.11.1`, or `^22` (`node -v`). Then branch and commit — `ng update` requires a clean git tree (commit again after each update step).
+**Prep**
+1. Commit everything on a fresh branch (`ng update` refuses on a dirty tree). Check `node -v` — Angular 19 needs Node ≥18.19.1, 20.11+, or 22.
+2. **Check your blockers first:** `ng-wings` (pinned at 18.0.5) and `wings-i18n` look like internal libs versioned to the Angular major. Confirm a 19-compatible build exists in your registry before anything else, or you'll stall mid-upgrade.
 
-2. **Core upgrade**:
-```
-npx ng update @angular/core@19 @angular/cli@19
-```
-This bumps all `@angular/*` packages, TypeScript (→ ~5.6), zone.js (→ ~0.15), and runs migrations. If it blocks on third-party peer deps, re-run with `--force` and fix those in the next steps.
+**Core**
 
-3. **Tooling**:
-```
-npx ng update ng-packagr@19 @angular-eslint/schematics@19
-npm i -D @typescript-eslint/eslint-plugin@^8 @typescript-eslint/parser@^8 eslint@^8.57.0 jest-preset-angular@^14.4.0
-```
-(angular-eslint 19 needs typescript-eslint 8; jest-preset-angular ≥14.4 adds Angular 19 support.)
+3. `ng update @angular/core@19 @angular/cli@19` — updates all @angular/* packages, zone.js to 0.15, TypeScript to ≥5.5, and runs migrations. Expect a big diff: every NgModule-declared component/directive/pipe gets an explicit `standalone: false` (standalone is the default in v19). That's normal. Commit.
+4. `ng update @angular/cdk@19` — commit.
 
-4. **Third-party libs**:
-```
-npm i primeng@^19 primeicons@^7 @fortawesome/angular-fontawesome@^1.0.0 @ngx-translate/core@^16
-```
+**Ecosystem**
 
-5. **angular2-multiselect-dropdown** — old, likely doesn't declare ng19 support. If install fails on it, add `--legacy-peer-deps` and manually test those dropdowns.
+5. NgRx: `ng update @ngrx/store@19 @ngrx/effects@19 @ngrx/router-store@19 @ngrx/component-store@19 @ngrx/store-devtools@19 @ngrx/schematics@19`
+6. Lint: `ng update @angular-eslint/schematics@19`, then `npm i -D @typescript-eslint/eslint-plugin@8 @typescript-eslint/parser@8` (angular-eslint 19 needs typescript-eslint 8; your eslint 8.57 is still fine).
+7. Jest: `npm i -D @angular-builders/jest@19` (your jest-preset-angular 14.6 already supports v19).
+8. FontAwesome: `npm i @fortawesome/angular-fontawesome@1` — 0.15 is Angular-18-only; 1.0 is the v19 release.
+9. PrimeNG: v18 also declares Angular 19 support, so it can stay for now. To align majors: `npm i primeng@19 @primeng/themes@19` (no theming rewrite this time, unlike 17→18). ngx-translate v16 already supports 19 — leave it.
 
-6. **Your library**: update `peerDependencies` in `projects/ng-wings/package.json` to allow `^19.0.0`.
+**Verify**
 
-7. **Review migrations**: v19 makes standalone the default, so the migration adds `standalone: false` to NgModule-declared components. That's expected — don't revert it.
+10. Fresh install, then `ng build`, `ng lint`, and your test script. Smoke-test the app.
 
-8. **Verify**: `npm install`, then build, lint, run your jest suites (`test:lib`, `test:showcase`), and smoke-test the app.
+Likely trouble spot: `angular2-multiselect-dropdown` is a legacy lib — if npm throws peer-dependency errors, that's the culprit. Since you already have PrimeNG, its MultiSelect is a cleaner replacement; `--legacy-peer-deps` only as a last resort.
 
-The official interactive checklist at update.angular.dev (select 18 → 19) covers any edge cases specific to your setup.
+Version numbers above are from memory as of early 2026 — cross-check update.angular.dev (select 18→19) for anything specific to your setup.
