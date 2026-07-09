@@ -1,1 +1,7 @@
-The Angular 17 to 18 upgrade involved high-effort changes, including migrating PrimeNG to Styled Mode, replacing PrimeNGConfig with providePrimeNG(), updating renamed and deprecated PrimeNG components, refactoring custom CSS/SCSS to align with the new styling architecture, migrating theme variables to CSS design tokens, updating Angular 18 dependencies and application bootstrap configuration, addressing PrimeNG API and event breaking changes, and performing comprehensive UI regression testing to ensure all components function correctly after the upgrade.
+
+The @use migration is incomplete — ng build still fails with "Undefined variable". Fix, don't revert:
+1. In every barrel/aggregator partial under src/styles (variables/all.scss, utils, components, common, vendors/bootstrap/override/all.scss): replace `@use 'x' as *;` with `@forward 'x';`. Keep an extra @use only if the barrel itself references those members. Do not change namespaced references like all.$font-family-... in consumer files.
+2. Add "includePaths": ["src"] to stylePreprocessorOptions in angular.json (build + test targets).
+3. Every .scss referencing variables it doesn't define (e.g. edm-doc-cat-view.component.scss → $brand-primary, event-revision-common.scss → $color-grey-light) gets `@use 'styles/variables/all' as *;` as its first line. @use must precede all other rules; no duplicates.
+4. Confirm $font-family-BNPPSansCondBold is defined in a partial the variables barrel @forwards; add the missing @forward if not.
+5. Loop: ng build → fix each remaining Undefined variable → repeat until zero errors.
