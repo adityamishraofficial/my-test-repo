@@ -1,207 +1,66 @@
-I wouldn’t recommend asking the LLM to “fix” your existing code. The current implementation is fundamentally incorrect because it inserts orphan <li> elements instead of creating a valid <ol> with a start attribute. It’s better to replace the implementation entirely.
-
-Prompt for your LLM
-
-Copy this prompt exactly:
+Here’s a concise but detailed prompt you can give to your LLM:
 
 ⸻
 
-Role: You are a Senior Angular + TinyMCE developer.
-
-I have implemented a custom Continue List button in TinyMCE, but the implementation is incorrect.
-
-Current problem
-
-My implementation creates standalone <li> elements using:
-
-editor.dom.create('li')
-
-and inserts them into the document.
-
-This results in:
-
-* incorrect indentation
-* invalid HTML
-* numbering issues
-* nested lists breaking
-* bullets continuing unexpectedly
-* formatting different from the original list
-
-I do NOT want to create standalone <li> elements.
-
-⸻
-
-Required behaviour
-
-Implement Microsoft Word-like Continue Numbering.
-
-Example:
-
-<ol>
-    <li>First</li>
-    <li>Second</li>
-</ol>
-<p>This is a paragraph.</p>
-(Cursor here)
-
-After clicking Continue List, the HTML should become
-
-<ol>
-    <li>First</li>
-    <li>Second</li>
-</ol>
-<p>This is a paragraph.</p>
-<ol start="3">
-    <li></li>
-</ol>
-
-NOT
-
-<li>3</li>
-
-⸻
-
-Functional Requirements
-
-1. Find the nearest previous ordered list (<ol>) before the cursor.
-2. Determine its starting number using the start attribute.
-
-If no start attribute exists, assume start = 1.
-
-3. Count ONLY direct child list items.
-
-Example:
-
-<ol start="5">
-    <li>A</li>
-    <li>B</li>
-    <li>C</li>
-</ol>
-
-Next number should be 8.
-
-Do NOT count nested list items.
-
-Use
-
-parentOl.querySelectorAll(':scope > li')
-
-instead of
-
-querySelectorAll('li')
-
-4. Insert a NEW ordered list
-
-<ol start="nextNumber">
-    <li>&nbsp;</li>
-</ol>
-
-at the current cursor position.
-
-5. Preserve
-
-* classes
-* inline styles
-* list-style-type
-* indentation
-* nesting level
-* TinyMCE formatting
-
-by cloning attributes from the previous list.
-
-6. Move the cursor inside the new empty <li>.
-7. If no previous ordered list exists, create
-
-<ol>
-    <li></li>
-</ol>
-
-starting from 1.
-
-8. The solution must work for
-
-* multiple ordered lists
-* paragraphs between lists
-* tables
-* nested ordered lists
-* nested unordered lists
-* TinyMCE 7
-* Angular
-
-9. Do NOT use
-
-editor.execCommand('InsertOrderedList')
-
-because it always starts numbering from 1.
-
-10. Use TinyMCE DOM APIs wherever possible.
-
-⸻
-
-Deliverables
-
-Provide:
-
-* complete TypeScript implementation
-* helper methods
-* toolbar button registration
-* detailed comments
-* explanation of each step
-* edge case handling
-* production-quality code
-
-⸻
-
-The algorithm you should implement
-
-Your calculateNextListNumber() should look like this:
-
-private calculateNextListNumber(previousOl: HTMLOListElement): number {
-    const start = Number(previousOl.getAttribute('start')) || 1;
-    const directItems =
-        previousOl.querySelectorAll(':scope > li');
-    return start + directItems.length;
-}
-
-Notice the important change:
-
-❌ Wrong
-
-previousOl.querySelectorAll('li')
-
-✅ Correct
-
-previousOl.querySelectorAll(':scope > li')
-
-because nested list items should not affect the top-level numbering.
-
-⸻
-
-Insertion logic
-
-Instead of
-
-const li = editor.dom.create('li');
-
-create
-
-const newOl = editor.dom.create('ol', {
-    start: String(nextNumber)
-});
-const newLi = editor.dom.create('li');
-newLi.innerHTML = '&nbsp;';
-newOl.appendChild(newLi);
-
-Then insert
-
-editor.selection.setNode(newOl);
-
-or
-
-editor.insertContent(newOl.outerHTML);
-
-and move the caret inside the newly created <li>.
-
-⸻
-
-One more recommendation: because you’re also generating DOCX/PDF and supporting multilevel numbering, I’d avoid using the HTML start attribute alone as the long-term solution. A more robust implementation maintains an internal numbering model (similar to Microsoft Word) and only renders HTML for display. That approach will handle complex nested numbering (e.g., 1.2.3) much more reliably during editing and export.
+Prompt:
+
+I need to implement conditional clause rendering based on payload values and Drools evaluation results.
+
+Context
+
+Each clause contains multiple variables (e.g., 5 properties). For every clause:
+
+* Determine whether each variable is:
+    * Present
+    * Missing
+    * Null
+* Determine whether the Drools condition evaluation passes or fails for the available variables.
+
+Based on these conditions, classify the clause into one of the following states and decide what should be displayed in the template preview/export.
+
+Rules
+
+1. Fully Satisfied
+    * All expected variables are present.
+    * No variable is null.
+    * Drools evaluation passes.
+    * Display: Clause content only (do not show clause name).
+2. Fully Dissatisfied
+    * All expected variables are present.
+    * Drools evaluation fails (one or more conditions do not match).
+    * Display: Nothing (hide both clause name and content).
+3. Partially Dissatisfied
+    * One or more variables are missing or null.
+    * Among the available variables, Drools evaluation does not fully pass.
+    * Display: Nothing (hide both clause name and content).
+4. Partially Satisfied
+    * One or more variables are missing or null.
+    * All available (non-null) variables satisfy the Drools conditions.
+    * Display: Clause name + Clause content.
+5. Can’t Say
+    * All expected variables are null (or no usable values are available).
+    * Drools evaluation cannot be meaningfully performed.
+    * Display: Clause name + Clause content.
+
+Implementation Requirements
+
+* Detect expected variables from the clause definition.
+* Compare them with the incoming payload.
+* Track:
+    * Total expected variables
+    * Present variables
+    * Missing variables
+    * Null variables
+    * Drools evaluation result
+* Implement a clean decision method (or enum-based state machine) that returns one of:
+    * FULLY_SATISFIED
+    * FULLY_DISSATISFIED
+    * PARTIALLY_SATISFIED
+    * PARTIALLY_DISSATISFIED
+    * CANT_SAY
+* The rendering layer should simply use this returned status to decide whether to display:
+    * Content only
+    * Clause name + content
+    * Nothing
+
+Write clean, maintainable, and extensible code with clear separation between evaluation logic and rendering logic.
