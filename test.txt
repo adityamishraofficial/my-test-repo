@@ -1,81 +1,78 @@
-A good approach is to first classify the clause into a status and then use a switch-case to decide the rendering. Here’s a prompt you can give your LLM:
+Yes, that’s a better approach. The decision should not be based on the total payload size. Instead, it should be based on the variables referenced in the clause condition.
+
+For example:
+
+* Clause condition:
+
+variable1 == "abc" && variable2 == "xyz"
+
+    Expected variables = {variable1, variable2}
+* Payload:
+
+{
+  "variable1": "abc",
+  "variable2": "xyz",
+  "variable3": "123",
+  "variable4": "456",
+  "variable5": "789"
+}
+
+    Here, all required variables are present. Extra variables in the payload are irrelevant.
+* Payload:
+
+{
+  "variable1": "abc",
+  "variable3": "123",
+  "variable4": "456"
+}
+
+    Here, variable2 is missing, so this is a Partial case.
 
 ⸻
 
-Prompt:
+Prompt for the LLM
 
-Implement the conditional clause evaluation using a switch-case based approach.
+Implement the clause evaluation by matching the variable keys used in the clause condition, not the total number of properties in the payload.
 
-Requirement
+Logic
 
-Before rendering a clause, first determine which condition it falls into based on:
+1. Parse the clause condition and extract all unique variable names.
+    Example:
 
-* Total expected variables in the clause.
-* Variables received in the payload.
-* Missing variables.
-* Null-valued variables.
-* Drools evaluation result (PASS/FAIL).
+variable1 == "abc" && variable2 == "xyz"
 
-Classification Logic
+    Expected variables:
 
-Determine one of the following statuses:
+{variable1, variable2}
 
-* FULLY_SATISFIED
-    * All expected variables are present.
-    * No variable is null.
-    * Drools evaluation = PASS.
-* FULLY_DISSATISFIED
-    * All expected variables are present.
-    * Drools evaluation = FAIL.
-* PARTIALLY_DISSATISFIED
-    * One or more variables are missing or null.
-    * Drools evaluation = FAIL (available variables do not completely satisfy the condition).
-* PARTIALLY_SATISFIED
-    * One or more variables are missing or null.
-    * All available (non-null) variables satisfy the Drools condition.
-* CANT_SAY
-    * All expected variables are null or no usable values are available.
-    * Drools evaluation cannot be performed.
+2. For each expected variable:
+    * Check whether the key exists in the payload.
+    * If it exists, check whether its value is null.
+    * Ignore any extra keys in the payload that are not part of the condition.
+3. Based on the expected variables:
+    * All expected variables present (and non-null) → Full evaluation.
+    * One or more expected variables missing or null → Partial evaluation.
+    * All expected variables null → Can’t Say.
+4. Execute the Drools evaluation.
+5. Determine the final status:
+    * Full + Drools PASS → FULLY_SATISFIED
+    * Full + Drools FAIL → FULLY_DISSATISFIED
+    * Partial + All available variables satisfy Drools → PARTIALLY_SATISFIED
+    * Partial + Any available variable fails Drools → PARTIALLY_DISSATISFIED
+    * All expected variables null → CANT_SAY
+6. Return the status and use a switch statement to decide the rendering.
 
-Implementation
+Example
 
-1. Create a method like:
+Clause:
 
-ClauseStatus determineClauseStatus(
-    int expectedVariableCount,
-    Map<String, Object> payload,
-    boolean droolsPassed
-)
+variable1 == "abc" && variable2 == "xyz"
 
-2. This method should:
-    * Count present, missing, and null variables.
-    * Determine the appropriate ClauseStatus.
-    * Return the status.
-3. Use a switch-case on the returned status:
+Payload	Result
+variable1, variable2 present and both match	FULLY_SATISFIED
+variable1, variable2 present but variable2 mismatches	FULLY_DISSATISFIED
+variable1 present, variable2 missing, variable1 matches	PARTIALLY_SATISFIED
+variable1 present, variable2 missing, variable1 mismatches	PARTIALLY_DISSATISFIED
+variable1 = null, variable2 = null	CANT_SAY
 
-switch (status) {
-    case FULLY_SATISFIED:
-        // Display clause content only
-        break;
-    case FULLY_DISSATISFIED:
-        // Display nothing
-        break;
-    case PARTIALLY_DISSATISFIED:
-        // Display nothing
-        break;
-    case PARTIALLY_SATISFIED:
-        // Display clause name + clause content
-        break;
-    case CANT_SAY:
-        // Display clause name + clause content
-        break;
-    default:
-        // Handle unexpected cases
-}
-
-Expectations
-
-* Keep the classification logic separate from the rendering logic.
-* Avoid deeply nested if-else blocks.
-* Use an enum (ClauseStatus) to represent the five possible outcomes.
-* Write clean, readable, and easily extensible code.
+Important: The implementation should compare only the variables referenced in the clause condition. Extra payload keys must not affect the evaluation. This matching should be based on variable names (keys), not the total number of payload properties.
