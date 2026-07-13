@@ -1,66 +1,81 @@
-Here’s a concise but detailed prompt you can give to your LLM:
+A good approach is to first classify the clause into a status and then use a switch-case to decide the rendering. Here’s a prompt you can give your LLM:
 
 ⸻
 
 Prompt:
 
-I need to implement conditional clause rendering based on payload values and Drools evaluation results.
+Implement the conditional clause evaluation using a switch-case based approach.
 
-Context
+Requirement
 
-Each clause contains multiple variables (e.g., 5 properties). For every clause:
+Before rendering a clause, first determine which condition it falls into based on:
 
-* Determine whether each variable is:
-    * Present
-    * Missing
-    * Null
-* Determine whether the Drools condition evaluation passes or fails for the available variables.
+* Total expected variables in the clause.
+* Variables received in the payload.
+* Missing variables.
+* Null-valued variables.
+* Drools evaluation result (PASS/FAIL).
 
-Based on these conditions, classify the clause into one of the following states and decide what should be displayed in the template preview/export.
+Classification Logic
 
-Rules
+Determine one of the following statuses:
 
-1. Fully Satisfied
+* FULLY_SATISFIED
     * All expected variables are present.
     * No variable is null.
-    * Drools evaluation passes.
-    * Display: Clause content only (do not show clause name).
-2. Fully Dissatisfied
+    * Drools evaluation = PASS.
+* FULLY_DISSATISFIED
     * All expected variables are present.
-    * Drools evaluation fails (one or more conditions do not match).
-    * Display: Nothing (hide both clause name and content).
-3. Partially Dissatisfied
+    * Drools evaluation = FAIL.
+* PARTIALLY_DISSATISFIED
     * One or more variables are missing or null.
-    * Among the available variables, Drools evaluation does not fully pass.
-    * Display: Nothing (hide both clause name and content).
-4. Partially Satisfied
+    * Drools evaluation = FAIL (available variables do not completely satisfy the condition).
+* PARTIALLY_SATISFIED
     * One or more variables are missing or null.
-    * All available (non-null) variables satisfy the Drools conditions.
-    * Display: Clause name + Clause content.
-5. Can’t Say
-    * All expected variables are null (or no usable values are available).
-    * Drools evaluation cannot be meaningfully performed.
-    * Display: Clause name + Clause content.
+    * All available (non-null) variables satisfy the Drools condition.
+* CANT_SAY
+    * All expected variables are null or no usable values are available.
+    * Drools evaluation cannot be performed.
 
-Implementation Requirements
+Implementation
 
-* Detect expected variables from the clause definition.
-* Compare them with the incoming payload.
-* Track:
-    * Total expected variables
-    * Present variables
-    * Missing variables
-    * Null variables
-    * Drools evaluation result
-* Implement a clean decision method (or enum-based state machine) that returns one of:
-    * FULLY_SATISFIED
-    * FULLY_DISSATISFIED
-    * PARTIALLY_SATISFIED
-    * PARTIALLY_DISSATISFIED
-    * CANT_SAY
-* The rendering layer should simply use this returned status to decide whether to display:
-    * Content only
-    * Clause name + content
-    * Nothing
+1. Create a method like:
 
-Write clean, maintainable, and extensible code with clear separation between evaluation logic and rendering logic.
+ClauseStatus determineClauseStatus(
+    int expectedVariableCount,
+    Map<String, Object> payload,
+    boolean droolsPassed
+)
+
+2. This method should:
+    * Count present, missing, and null variables.
+    * Determine the appropriate ClauseStatus.
+    * Return the status.
+3. Use a switch-case on the returned status:
+
+switch (status) {
+    case FULLY_SATISFIED:
+        // Display clause content only
+        break;
+    case FULLY_DISSATISFIED:
+        // Display nothing
+        break;
+    case PARTIALLY_DISSATISFIED:
+        // Display nothing
+        break;
+    case PARTIALLY_SATISFIED:
+        // Display clause name + clause content
+        break;
+    case CANT_SAY:
+        // Display clause name + clause content
+        break;
+    default:
+        // Handle unexpected cases
+}
+
+Expectations
+
+* Keep the classification logic separate from the rendering logic.
+* Avoid deeply nested if-else blocks.
+* Use an enum (ClauseStatus) to represent the five possible outcomes.
+* Write clean, readable, and easily extensible code.
