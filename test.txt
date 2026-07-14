@@ -1,78 +1,20 @@
-Yes, that’s a better approach. The decision should not be based on the total payload size. Instead, it should be based on the variables referenced in the clause condition.
+Update the response generation based on the clause evaluation status as follows:
 
-For example:
+1. FULLY_SATISFIED
 
-* Clause condition:
+* Return only the clause content.
+* Do not include the clause title/name.
 
-variable1 == "abc" && variable2 == "xyz"
+2. FULLY_DISSATISFIED
 
-    Expected variables = {variable1, variable2}
-* Payload:
+* Filter out the clause completely.
+* Do not return the clause title or content.
 
-{
-  "variable1": "abc",
-  "variable2": "xyz",
-  "variable3": "123",
-  "variable4": "456",
-  "variable5": "789"
-}
+3. CANT_SAY
 
-    Here, all required variables are present. Extra variables in the payload are irrelevant.
-* Payload:
+* Return both:
+    * Clause Title (Clause Name)
+    * Clause Content
 
-{
-  "variable1": "abc",
-  "variable3": "123",
-  "variable4": "456"
-}
 
-    Here, variable2 is missing, so this is a Partial case.
-
-⸻
-
-Prompt for the LLM
-
-Implement the clause evaluation by matching the variable keys used in the clause condition, not the total number of properties in the payload.
-
-Logic
-
-1. Parse the clause condition and extract all unique variable names.
-    Example:
-
-variable1 == "abc" && variable2 == "xyz"
-
-    Expected variables:
-
-{variable1, variable2}
-
-2. For each expected variable:
-    * Check whether the key exists in the payload.
-    * If it exists, check whether its value is null.
-    * Ignore any extra keys in the payload that are not part of the condition.
-3. Based on the expected variables:
-    * All expected variables present (and non-null) → Full evaluation.
-    * One or more expected variables missing or null → Partial evaluation.
-    * All expected variables null → Can’t Say.
-4. Execute the Drools evaluation.
-5. Determine the final status:
-    * Full + Drools PASS → FULLY_SATISFIED
-    * Full + Drools FAIL → FULLY_DISSATISFIED
-    * Partial + All available variables satisfy Drools → PARTIALLY_SATISFIED
-    * Partial + Any available variable fails Drools → PARTIALLY_DISSATISFIED
-    * All expected variables null → CANT_SAY
-6. Return the status and use a switch statement to decide the rendering.
-
-Example
-
-Clause:
-
-variable1 == "abc" && variable2 == "xyz"
-
-Payload	Result
-variable1, variable2 present and both match	FULLY_SATISFIED
-variable1, variable2 present but variable2 mismatches	FULLY_DISSATISFIED
-variable1 present, variable2 missing, variable1 matches	PARTIALLY_SATISFIED
-variable1 present, variable2 missing, variable1 mismatches	PARTIALLY_DISSATISFIED
-variable1 = null, variable2 = null	CANT_SAY
-
-Important: The implementation should compare only the variables referenced in the clause condition. Extra payload keys must not affect the evaluation. This matching should be based on variable names (keys), not the total number of payload properties.
+Implement the following enhancement without modifying any database tables, entity models, or database schema. Restrict the changes to the service/business logic only.
