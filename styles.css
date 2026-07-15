@@ -1,7 +1,777 @@
 
-The @use migration is incomplete — ng build still fails with "Undefined variable". Fix, don't revert:
-1. In every barrel/aggregator partial under src/styles (variables/all.scss, utils, components, common, vendors/bootstrap/override/all.scss): replace `@use 'x' as *;` with `@forward 'x';`. Keep an extra @use only if the barrel itself references those members. Do not change namespaced references like all.$font-family-... in consumer files.
-2. Add "includePaths": ["src"] to stylePreprocessorOptions in angular.json (build + test targets).
-3. Every .scss referencing variables it doesn't define (e.g. edm-doc-cat-view.component.scss → $brand-primary, event-revision-common.scss → $color-grey-light) gets `@use 'styles/variables/all' as *;` as its first line. @use must precede all other rules; no duplicates.
-4. Confirm $font-family-BNPPSansCondBold is defined in a partial the variables barrel @forwards; add the missing @forward if not.
-5. Loop: ng build → fix each remaining Undefined variable → repeat until zero errors.
+You are a Principal Angular Architect and PrimeNG Core Maintainer.
+
+You are migrating a very large enterprise application from:
+
+Angular 18
+PrimeNG 18
+
+to
+
+Angular 19
+PrimeNG 19
+
+This is NOT a simple code conversion.
+
+Your job is to remove EVERY deprecated PrimeNG API from the entire project.
+
+Do NOT stop after fixing one component.
+
+Continue until there are ZERO PrimeNG deprecation warnings.
+
+=========================================
+IMPORTANT
+=========================================
+
+Do NOT guess.
+
+If you are unsure about a PrimeNG 19 API,
+look at the official PrimeNG migration guide before modifying code.
+
+Never invent APIs.
+
+Never generate pseudo code.
+
+Only generate valid Angular 19 + PrimeNG 19 code.
+
+=========================================
+PHASE 1
+Project Scan
+=========================================
+
+Recursively scan the ENTIRE project.
+
+Scan
+
+*.html
+
+*.ts
+
+*.scss
+
+*.css
+
+*.module.ts
+
+Standalone Components
+
+Shared Components
+
+Libraries
+
+Feature Modules
+
+Lazy Modules
+
+Search inside
+
+imports
+
+decorators
+
+templates
+
+styles
+
+providers
+
+routes
+
+=========================================
+PHASE 2
+Search Every Deprecated Component
+=========================================
+
+Search for ALL PrimeNG usages.
+
+Examples include (not limited to):
+
+Accordion
+
+AccordionTab
+
+TabView
+
+TabPanel
+
+Calendar
+
+Dropdown
+
+InputSwitch
+
+OverlayPanel
+
+Sidebar
+
+Messages
+
+Message
+
+Editor
+
+Steps
+
+Chips
+
+CascadeSelect
+
+TreeTable
+
+OrderList
+
+PickList
+
+OrganizationChart
+
+Terminal
+
+Timeline
+
+DataView
+
+Paginator
+
+PaginatorState
+
+Tooltip
+
+Overlay
+
+Menu
+
+TieredMenu
+
+ContextMenu
+
+SplitButton
+
+MegaMenu
+
+PanelMenu
+
+Tree
+
+TreeSelect
+
+SelectButton
+
+Password
+
+Rating
+
+ColorPicker
+
+FileUpload
+
+Image
+
+Carousel
+
+Galleria
+
+Toast
+
+Dialog
+
+ConfirmDialog
+
+ConfirmPopup
+
+DynamicDialog
+
+AutoComplete
+
+MultiSelect
+
+InputNumber
+
+Slider
+
+Knob
+
+Tag
+
+Badge
+
+ProgressBar
+
+ProgressSpinner
+
+Skeleton
+
+VirtualScroller
+
+Table
+
+Column
+
+Row
+
+ColumnFilter
+
+ColumnGroup
+
+RowGroup
+
+FrozenColumn
+
+Chip
+
+ScrollPanel
+
+ScrollTop
+
+Splitter
+
+Toolbar
+
+Fieldset
+
+Panel
+
+Card
+
+Divider
+
+Avatar
+
+AvatarGroup
+
+BlockUI
+
+Inplace
+
+Dock
+
+SpeedDial
+
+Any other PrimeNG component
+
+=========================================
+PHASE 3
+Search Deprecated APIs
+=========================================
+
+Search every file for
+
+deprecated selectors
+
+deprecated events
+
+deprecated inputs
+
+deprecated outputs
+
+deprecated directives
+
+deprecated templates
+
+deprecated ng-template names
+
+deprecated CSS classes
+
+deprecated design tokens
+
+deprecated theme variables
+
+deprecated imports
+
+deprecated services
+
+deprecated interfaces
+
+deprecated enums
+
+deprecated utility functions
+
+=========================================
+PHASE 4
+Migration Rules
+=========================================
+
+Whenever a deprecated component is found
+
+Follow this order.
+
+STEP 1
+
+Read the official PrimeNG 19 API.
+
+STEP 2
+
+Understand what changed.
+
+STEP 3
+
+Replace ONLY the deprecated API.
+
+STEP 4
+
+Keep business logic unchanged.
+
+=========================================
+Accordion Migration
+=========================================
+
+Replace
+
+AccordionTab
+
+with
+
+Accordion Panel
+
+Old
+
+<p-accordion>
+
+<p-accordionTab header="A">
+
+Content
+
+</p-accordionTab>
+
+</p-accordion>
+
+New
+
+<p-accordion>
+
+<p-accordion-panel value="0">
+
+<p-accordion-header>
+
+A
+
+</p-accordion-header>
+
+<p-accordion-content>
+
+Content
+
+</p-accordion-content>
+
+</p-accordion-panel>
+
+</p-accordion>
+
+Preserve
+
+lazy loading
+
+multiple
+
+active state
+
+disabled
+
+icons
+
+custom templates
+
+events
+
+ng-template
+
+=========================================
+TabView Migration
+=========================================
+
+Replace
+
+TabView
+
+with
+
+Tabs
+
+Convert every
+
+TabPanel
+
+to
+
+Tab
+
+and
+
+TabPanel Content
+
+using the new PrimeNG 19 structure.
+
+Preserve
+
+dynamic tabs
+
+selected tab
+
+events
+
+lazy loading
+
+templates
+
+=========================================
+Dropdown Migration
+=========================================
+
+Replace
+
+Dropdown
+
+with
+
+Select
+
+Preserve
+
+filter
+
+virtual scroll
+
+editable
+
+clear button
+
+optionLabel
+
+optionValue
+
+templates
+
+events
+
+Reactive Forms
+
+ngModel
+
+=========================================
+Calendar Migration
+=========================================
+
+Replace
+
+Calendar
+
+with
+
+DatePicker
+
+Preserve
+
+showIcon
+
+showTime
+
+selectionMode
+
+dateFormat
+
+minDate
+
+maxDate
+
+validators
+
+Reactive Forms
+
+=========================================
+InputSwitch Migration
+=========================================
+
+Replace
+
+InputSwitch
+
+with
+
+ToggleSwitch
+
+=========================================
+OverlayPanel Migration
+=========================================
+
+Replace
+
+OverlayPanel
+
+with
+
+Popover
+
+Preserve
+
+toggle()
+
+show()
+
+hide()
+
+events
+
+=========================================
+Sidebar Migration
+=========================================
+
+Replace
+
+Sidebar
+
+with
+
+Drawer
+
+=========================================
+Editor Migration
+=========================================
+
+Update deprecated APIs only.
+
+Do NOT change TinyMCE configuration.
+
+=========================================
+Messages Migration
+=========================================
+
+Use latest PrimeNG 19 APIs.
+
+=========================================
+Steps Migration
+=========================================
+
+Replace with Stepper when required.
+
+=========================================
+TreeTable Migration
+=========================================
+
+Update deprecated inputs and templates.
+
+=========================================
+Tables
+=========================================
+
+Search for
+
+p-table
+
+ColumnFilter
+
+RowExpansion
+
+FrozenColumn
+
+editing
+
+virtualScroll
+
+lazy
+
+selection
+
+sorting
+
+pagination
+
+Replace deprecated APIs.
+
+=========================================
+AutoComplete
+=========================================
+
+Update deprecated properties
+
+events
+
+templates
+
+forceSelection
+
+dropdown
+
+multiple
+
+typeahead
+
+=========================================
+MultiSelect
+=========================================
+
+Update all deprecated APIs.
+
+=========================================
+Dialog
+=========================================
+
+Update
+
+templates
+
+events
+
+visibility
+
+responsive APIs
+
+=========================================
+Theme Migration
+=========================================
+
+Search
+
+entire SCSS
+
+for
+
+--surface
+
+--primary
+
+--text-color
+
+--content
+
+--overlay
+
+--highlight
+
+old design tokens
+
+Replace with PrimeNG 19 design tokens.
+
+=========================================
+Imports
+=========================================
+
+Remove every deprecated import.
+
+Remove unused imports.
+
+Update standalone imports.
+
+=========================================
+Events
+=========================================
+
+Replace deprecated events.
+
+Keep existing event handlers.
+
+=========================================
+Forms
+=========================================
+
+Reactive Forms must continue working.
+
+Template Forms must continue working.
+
+Validators must continue working.
+
+=========================================
+Templates
+=========================================
+
+Preserve
+
+ng-template
+
+TemplateRef
+
+Content Projection
+
+Dynamic Components
+
+=========================================
+Dynamic Components
+=========================================
+
+Preserve
+
+*ngFor
+
+*ngIf
+
+Signals
+
+Computed
+
+Effects
+
+Inputs
+
+Outputs
+
+=========================================
+Verification
+=========================================
+
+After EACH migration verify
+
+Angular compiles
+
+No TS errors
+
+No template errors
+
+No deprecated warnings
+
+No console warnings
+
+=========================================
+Final Verification
+=========================================
+
+Search entire project again.
+
+Ensure
+
+ZERO AccordionTab
+
+ZERO TabView
+
+ZERO Calendar
+
+ZERO Dropdown
+
+ZERO InputSwitch
+
+ZERO OverlayPanel
+
+ZERO Sidebar
+
+ZERO deprecated imports
+
+ZERO deprecated selectors
+
+ZERO deprecated CSS
+
+ZERO deprecated events
+
+ZERO deprecated templates
+
+ZERO deprecated design tokens
+
+=========================================
+Output Format
+=========================================
+
+For EVERY modified file provide:
+
+1. File path
+
+2. Reason for modification
+
+3. Before code
+
+4. After code
+
+5. Explanation
+
+6. Any additional migration required
+
+Never skip files.
+
+Never stop after fixing one warning.
+
+Continue until the entire project is fully compatible with Angular 19 + PrimeNG 19 and there are no remaining deprecation warnings or compilation issues.
