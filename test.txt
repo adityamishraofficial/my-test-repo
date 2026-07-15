@@ -1,20 +1,32 @@
-Update the response generation based on the clause evaluation status as follows:
+That’s a cleaner and safer approach. Here’s the updated prompt:
 
-1. FULLY_SATISFIED
+⸻
 
-* Return only the clause content.
-* Do not include the clause title/name.
+Updated Evaluation Logic
 
-2. FULLY_DISSATISFIED
+Currently, if a required variable referenced in the clause condition is missing from the payload, Drools returns false because the variable does not exist. This makes it difficult to distinguish between a genuine rule mismatch and missing data.
 
-* Filter out the clause completely.
-* Do not return the clause title or content.
+Implement the following approach:
 
-3. CANT_SAY
+1. Parse the clause condition and extract all expected variable keys.
+2. Create a copy of the incoming payload. Do not modify the original payload.
+3. For each expected variable:
+    * If the variable exists in the payload copy, retain its value.
+    * If the variable is missing, add it to the payload copy with a value of null.
+4. Pass the payload copy to Drools for evaluation so that all expected variables are available.
+5. Before evaluation, keep track of:
+    * Variables that were originally missing.
+    * Variables whose values are null.
+6. Based on the variable availability and the Drools result, determine the final status:
+    * All expected variables present & Drools PASS → FULLY_SATISFIED
+    * All expected variables present & Drools FAIL → FULLY_DISSATISFIED
+    * One or more variables missing/null & all available variables satisfy the condition → PARTIALLY_SATISFIED
+    * One or more variables missing/null & any available variable fails the condition → PARTIALLY_DISSATISFIED
+    * All expected variables are null → CANT_SAY
 
-* Return both:
-    * Clause Title (Clause Name)
-    * Clause Content
+Important
 
-
-Implement the following enhancement without modifying any database tables, entity models, or database schema. Restrict the changes to the service/business logic only.
+* Never modify the original payload.
+* Always perform the evaluation using a cloned/copy of the payload.
+* Missing variables should only be added as null to the payload copy used for Drools evaluation.
+* The original payload must remain unchanged for any downstream processing.
