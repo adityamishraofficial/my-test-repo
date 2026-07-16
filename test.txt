@@ -1,19 +1,38 @@
-diff --git a/node_modules/primeng/fesm2022/primeng-table.mjs b/node_modules/primeng/fesm2022/primeng-table.mjs
-index 5b1ad8c..a6a87e3 100644
---- a/node_modules/primeng/fesm2022/primeng-table.mjs
-+++ b/node_modules/primeng/fesm2022/primeng-table.mjs
-@@ -2804,10 +2804,12 @@ class Table extends BaseComponent {
-         for (const [, filterMetadata] of Object.entries(this.filters)) {
-             if (Array.isArray(filterMetadata)) {
-                 for (let filter of filterMetadata) {
--                    filter.value = null;
-+                    if(filter && typeof filter === 'object'){
-+                        filter.value = null;
-+                    }
-                 }
-             }
--            else if (filterMetadata) {
-+            else if (filterMetadata && typeof filterMetadata === 'object') {
-                 filterMetadata.value = null;
-             }
-         }
+Your package.json shows 18.2.14, so reaching 20 is two hops — `ng update` can't skip majors. (If this repo is actually on 19 already, jump to step 7.)
+
+**Prep**
+1. `git checkout -b upgrade/angular-20` — everything committed, clean tree.
+2. Install Node 22 LTS, confirm with `node -v` (≥22.12). Required for v20, works fine for v19.
+3. `npm ci` then `npm run build` — make sure you have a green baseline *before* changing anything.
+
+**Hop 1: 18 → 19**
+
+4. Run:
+```
+ng update @angular/core@19 @angular/cli@19 ng-packagr@19
+```
+If npm aborts on peer conflicts (primeng and multiselect-dropdown will complain), re-run with `--force`. This also bumps TypeScript and zone.js and runs the v19 migrations.
+
+5. `npm i primeng@19.1.4` — same version wings-front runs.
+6. `npm run build`, fix any compile errors, **commit**. This checkpoint matters — if something breaks in hop 2, you'll know which major caused it.
+
+**Hop 2: 19 → 20**
+
+7. Run:
+```
+ng update @angular/core@20 @angular/cli@20 ng-packagr@20
+```
+(`--force` again if peers block.)
+
+8. `npm i primeng@20 primeicons@^7` — and if this repo configures a theme, swap `@primeng/themes` for `@primeuix/themes` (renamed in v20).
+9. Remaining deps in one pass: `@fortawesome/angular-fontawesome@^2`, `@ngx-translate/core@^16`, dev-side `jest-preset-angular@^14.6`, and the seven `@angular-eslint/*` packages to `^20` (they'll want `eslint@9` + `@typescript-eslint@8` — if lint config fights you, park it, it doesn't block builds).
+10. Edit by hand: `projects/ng-wings/package.json` → peerDependencies to `^20.0.0`; root package.json → `"engines": {"node": ">=20.19"}`, version to `20.0.0-SNAPSHOT`.
+11. Verify all four: `npm run build`, `build:showcase`, `test`, `test:showcase`.
+12. Publish the snapshot to Artifactory, then point wings-front at it.
+
+**Trouble spots to recognize:**
+- `angular2-multiselect-dropdown` won't declare v20 support — `--legacy-peer-deps` gets you through; the real fix is replacing it with PrimeNG's `p-multiSelect`.
+- 404s during `ng update` mean Artifactory hasn't mirrored the v20 packages yet — registry team's problem, not yours.
+- AccordionTab warnings → migrate to the `p-accordion-panel` / header / content structure while you're in here.
+
+Start with step 1 and tell me what step 4 outputs — that's where the first surprises usually show up.
