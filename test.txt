@@ -1,32 +1,19 @@
-That’s a cleaner and safer approach. Here’s the updated prompt:
-
-⸻
-
-Updated Evaluation Logic
-
-Currently, if a required variable referenced in the clause condition is missing from the payload, Drools returns false because the variable does not exist. This makes it difficult to distinguish between a genuine rule mismatch and missing data.
-
-Implement the following approach:
-
-1. Parse the clause condition and extract all expected variable keys.
-2. Create a copy of the incoming payload. Do not modify the original payload.
-3. For each expected variable:
-    * If the variable exists in the payload copy, retain its value.
-    * If the variable is missing, add it to the payload copy with a value of null.
-4. Pass the payload copy to Drools for evaluation so that all expected variables are available.
-5. Before evaluation, keep track of:
-    * Variables that were originally missing.
-    * Variables whose values are null.
-6. Based on the variable availability and the Drools result, determine the final status:
-    * All expected variables present & Drools PASS → FULLY_SATISFIED
-    * All expected variables present & Drools FAIL → FULLY_DISSATISFIED
-    * One or more variables missing/null & all available variables satisfy the condition → PARTIALLY_SATISFIED
-    * One or more variables missing/null & any available variable fails the condition → PARTIALLY_DISSATISFIED
-    * All expected variables are null → CANT_SAY
-
-Important
-
-* Never modify the original payload.
-* Always perform the evaluation using a cloned/copy of the payload.
-* Missing variables should only be added as null to the payload copy used for Drools evaluation.
-* The original payload must remain unchanged for any downstream processing.
+diff --git a/node_modules/primeng/fesm2022/primeng-table.mjs b/node_modules/primeng/fesm2022/primeng-table.mjs
+index 5b1ad8c..a6a87e3 100644
+--- a/node_modules/primeng/fesm2022/primeng-table.mjs
++++ b/node_modules/primeng/fesm2022/primeng-table.mjs
+@@ -2804,10 +2804,12 @@ class Table extends BaseComponent {
+         for (const [, filterMetadata] of Object.entries(this.filters)) {
+             if (Array.isArray(filterMetadata)) {
+                 for (let filter of filterMetadata) {
+-                    filter.value = null;
++                    if(filter && typeof filter === 'object'){
++                        filter.value = null;
++                    }
+                 }
+             }
+-            else if (filterMetadata) {
++            else if (filterMetadata && typeof filterMetadata === 'object') {
+                 filterMetadata.value = null;
+             }
+         }
