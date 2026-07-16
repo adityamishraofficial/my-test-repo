@@ -1,8 +1,5 @@
-Analyze ProcessTemplateHelper.java and fix all SonarQube issues without changing the existing business logic or functionality.
+Analyze ClauseResolutionServiceImpl.java and fix all SonarQube issues without changing the existing business logic or functionality.
 
-Address the following issues:
+Issues to address:
 
-* Replace if-then-else statements that can be simplified with a single method invocation.
-* Replace the if/else chain with a switch expression where appropriate.
-* Refactor the method with Cognitive Complexity 42 to reduce it to 15 or below by extracting helper methods and simplifying control flow while preserving behavior.
-* Replace the duplicated string literal "preview" with a private static final constant and use it throughout the class.
+* Refactor the methods at lines 54, 137, and 236 to reduce the number of parameters from 9 to 7 or fewer.
