@@ -1,5 +1,10 @@
-Analyze ClauseResolutionServiceImpl.java and fix all SonarQube issues without changing the existing business logic or functionality.
+lPlease analyze the complete execution flow of the Continue List feature and identify the root cause of the incorrect cursor placement.
+Specifically verify:
 
-Issues to address:
-
-* Refactor the methods at lines 54, 137, and 236 to reduce the number of parameters from 9 to 7 or fewer.
+1. Whether the cursor is being restored before all DOM manipulations are complete.
+2. Whether any HTML normalization or marker recalculation recreates the <ol> or <li> after the cursor has already been set.
+3. Whether TinyMCE’s selection.setCursorLocation(), selection.setRng(), or selection.select() is being used correctly.
+4. Whether the cursor is being placed on the <li> element instead of its text node.
+5. Whether an empty <br>, empty text node, or empty <p> is being inserted, causing the caret to move to the next line.
+6. Whether asynchronous operations (setTimeout, requestAnimationFrame, Angular change detection, MutationObserver, etc.) are changing the DOM after the cursor is positioned.
+7. Whether TinyMCE’s internal selection lifecycle is being interrupted by custom DOM manipulation.
