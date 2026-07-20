@@ -1,10 +1,126 @@
-lPlease analyze the complete execution flow of the Continue List feature and identify the root cause of the incorrect cursor placement.
-Specifically verify:
+```typescript
+/**
+ * Replaces continueList (lines ~138–253 of List-continuation.util.ts).
+ * Helpers findPreviousOrderedlist, calculateNextListNumber and
+ * cloneListAttributes stay unchanged.
+ */
+export function continueList(editor: any): void {
+  const body = editor.getBody();
 
-1. Whether the cursor is being restored before all DOM manipulations are complete.
-2. Whether any HTML normalization or marker recalculation recreates the <ol> or <li> after the cursor has already been set.
-3. Whether TinyMCE’s selection.setCursorLocation(), selection.setRng(), or selection.select() is being used correctly.
-4. Whether the cursor is being placed on the <li> element instead of its text node.
-5. Whether an empty <br>, empty text node, or empty <p> is being inserted, causing the caret to move to the next line.
-6. Whether asynchronous operations (setTimeout, requestAnimationFrame, Angular change detection, MutationObserver, etc.) are changing the DOM after the cursor is positioned.
-7. Whether TinyMCE’s internal selection lifecycle is being interrupted by custom DOM manipulation.
+  // Check if editor is empty (no content or only empty paragraph/page div)
+  const editorContent = body.innerHTML?.trim();
+  if (
+    !editorContent ||
+    editorContent === '' ||
+    editorContent === '<p></p>' ||
+    editorContent === '<div class="page"><p></p></div>'
+  ) {
+    editor.notificationManager.open({
+      text: 'The editor is empty. Please add a numbered list first.',
+      type: 'warning',
+      timeout: 3000,
+    });
+    return;
+  }
+
+  // Check if there's any ordered list in the editor
+  const existingOl = body.querySelector('ol');
+  if (!existingOl) {
+    editor.notificationManager.open({
+      text: 'No numbered list found in the editor. Please add a numbered list first.',
+      type: 'warning',
+      timeout: 3000,
+    });
+    return;
+  }
+
+  // Find the nearest previous ordered list with a timeout to prevent hanging
+  let previousOl: HTMLOListElement | null = null;
+  const timeout = setTimeout(() => {
+    editor.notificationManager.open({
+      text: 'Failed to continue list. Please try again.',
+      type: 'error',
+      timeout: 3000,
+    });
+  }, 1000); // 1 second timeout
+
+  try {
+    previousOl = findPreviousOrderedlist(editor);
+  } catch (error) {
+    clearTimeout(timeout);
+    editor.notificationManager.open({
+      text: 'An error occurred while continuing the list.',
+      type: 'error',
+      timeout: 3000,
+    });
+    return;
+  }
+
+  clearTimeout(timeout);
+
+  // If no previous list found, create a new one starting from 1
+  if (!previousOl) {
+    insertListAndPlaceCaret(editor, {});
+    return;
+  }
+
+  // Calculate the next number for the list
+  const nextNumber = calculateNextListNumber(previousOl);
+
+  // Clone attributes from the previous list to preserve formatting
+  const newOlAttributes = cloneListAttributes(previousOl);
+
+  // Set the start attribute for the new list
+  newOlAttributes['start'] = String(nextNumber);
+
+  insertListAndPlaceCaret(editor, newOlAttributes);
+}
+
+const TEMP_OL_ID = '__continue-list-temp__';
+
+/**
+ * Inserts a new <ol> at the caret and moves the cursor INSIDE its
+ * first <li>, right after the list marker.
+ *
+ * Why the temp id: selection.setNode() serializes the element and
+ * inserts a COPY into the document. The local `newOl` reference stays
+ * detached, so selecting into it silently fails and the caret lands
+ * on the next line. We tag the list, re-find the element actually
+ * inserted, then place the caret there.
+ */
+function insertListAndPlaceCaret(
+  editor: any,
+  olAttributes: Record<string, string>
+): void {
+  const selection = editor.selection;
+  const dom = editor.dom;
+
+  // A bogus <br> lets the caret sit inside an otherwise empty <li>.
+  // TinyMCE strips data-mce-bogus elements on save.
+  const newLi = dom.create('li', {}, '<br data-mce-bogus="1">');
+
+  const attributes = { ...olAttributes, id: TEMP_OL_ID };
+  const newOl = dom.create('ol', attributes, newLi.outerHTML);
+
+  // Insert the new list at the current caret position
+  selection.setNode(newOl);
+
+  // Re-find the element that was actually inserted into the document
+  const insertedOl = dom.get(TEMP_OL_ID);
+  if (!insertedOl) {
+    return;
+  }
+  insertedOl.removeAttribute('id');
+
+  const firstLi = insertedOl.querySelector('li');
+  if (firstLi) {
+    // Place the cursor inside the list item, right after the marker
+    selection.setCursorLocation(firstLi, 0);
+
+    // Focus the editor to ensure the cursor is visible
+    editor.focus();
+  }
+}
+```
+
+This replaces lines 138–253. Everything after (the outdenting handler at line 255+) and the helper functions stay as they are.
