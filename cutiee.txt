@@ -1,4 +1,3 @@
-```typescript
 /**
  * Replaces continueList (lines ~138–253 of List-continuation.util.ts).
  * Helpers findPreviousOrderedlist, calculateNextListNumber and
@@ -82,11 +81,12 @@ const TEMP_OL_ID = '__continue-list-temp__';
  * Inserts a new <ol> at the caret and moves the cursor INSIDE its
  * first <li>, right after the list marker.
  *
- * Why the temp id: selection.setNode() serializes the element and
- * inserts a COPY into the document. The local `newOl` reference stays
- * detached, so selecting into it silently fails and the caret lands
- * on the next line. We tag the list, re-find the element actually
- * inserted, then place the caret there.
+ * selection.setNode() parses and inserts a COPY of the element, so
+ * the list is tagged with a temp id and re-found after insertion.
+ * The parser also strips bogus content, so the li starts with an
+ * nbsp and is swapped to a bogus <br> afterwards via direct DOM
+ * calls (which bypass the parser). The serializer removes
+ * data-mce-bogus on save, so nothing extra ends up in the output.
  */
 function insertListAndPlaceCaret(
   editor: any,
@@ -95,17 +95,14 @@ function insertListAndPlaceCaret(
   const selection = editor.selection;
   const dom = editor.dom;
 
-  // A bogus <br> lets the caret sit inside an otherwise empty <li>.
-  // TinyMCE strips data-mce-bogus elements on save.
-  const newLi = dom.create('li', {}, '<br data-mce-bogus="1">');
-
+  // nbsp keeps the li non-empty while setNode parses the HTML string
   const attributes = { ...olAttributes, id: TEMP_OL_ID };
-  const newOl = dom.create('ol', attributes, newLi.outerHTML);
+  const newOl = dom.create('ol', attributes, '<li>\u00A0</li>');
 
   // Insert the new list at the current caret position
   selection.setNode(newOl);
 
-  // Re-find the element that was actually inserted into the document
+  // Get the element actually inserted into the document
   const insertedOl = dom.get(TEMP_OL_ID);
   if (!insertedOl) {
     return;
@@ -113,14 +110,17 @@ function insertListAndPlaceCaret(
   insertedOl.removeAttribute('id');
 
   const firstLi = insertedOl.querySelector('li');
-  if (firstLi) {
-    // Place the cursor inside the list item, right after the marker
-    selection.setCursorLocation(firstLi, 0);
-
-    // Focus the editor to ensure the cursor is visible
-    editor.focus();
+  if (!firstLi) {
+    return;
   }
-}
-```
 
-This replaces lines 138–253. Everything after (the outdenting handler at line 255+) and the helper functions stay as they are.
+  // Swap the nbsp for a bogus <br> so the item looks empty
+  // but the caret can still sit inside it
+  firstLi.innerHTML = '';
+  dom.add(firstLi, 'br', { 'data-mce-bogus': '1' });
+
+  // Focus first, then place the caret, so focus() doesn't
+  // restore the old selection over ours
+  editor.focus();
+  selection.setCursorLocation(firstLi, 0);
+}
