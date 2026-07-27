@@ -1,38 +1,63 @@
-Your package.json shows 18.2.14, so reaching 20 is two hops — `ng update` can't skip majors. (If this repo is actually on 19 already, jump to step 7.)
+Your biggest blocker is at the very top of that file: **`"engines": {"node": ">=18"}`**. Angular 20 dropped Node 18 entirely — it needs `^20.19.0 || ^22.12.0 || ^24.0.0` (note: odd majors like 21/23 aren't supported). Sort that out before anything else, including CI images and any `.nvmrc`/Dockerfile.
 
-**Prep**
-1. `git checkout -b upgrade/angular-20` — everything committed, clean tree.
-2. Install Node 22 LTS, confirm with `node -v` (≥22.12). Required for v20, works fine for v19.
-3. `npm ci` then `npm run build` — make sure you have a green baseline *before* changing anything.
+## 1. Prep
 
-**Hop 1: 18 → 19**
-
-4. Run:
+```bash
+git checkout -b feat/angular-20
+node -v                      # must be 20.19+ / 22.12+
+npm ls @angular/core         # confirm you're clean on 19.2.x first
 ```
-ng update @angular/core@19 @angular/cli@19 ng-packagr@19
+
+Also: temporarily disable your `patch-package` postinstall. `patches/primeng+19.1.4.patch` will hard-fail the moment PrimeNG's version changes, and you don't want that masking real errors mid-update.
+
+## 2. Core update
+
+`ng update` refuses to run with unmet peers, and you have two known offenders (`angular2-multiselect-dropdown` pinned to ancient Angular, `jest-preset-angular` 14.x). Same play as last time:
+
+```bash
+npx ng update @angular/core@20 @angular/cli@20 --force
+npx ng update @angular/cdk@20 2>/dev/null   # skip if unused
 ```
-If npm aborts on peer conflicts (primeng and multiselect-dropdown will complain), re-run with `--force`. This also bumps TypeScript and zone.js and runs the v19 migrations.
 
-5. `npm i primeng@19.1.4` — same version wings-front runs.
-6. `npm run build`, fix any compile errors, **commit**. This checkpoint matters — if something breaks in hop 2, you'll know which major caused it.
+Then update the rest of the Angular-versioned packages manually — `@angular-devkit/build-angular`, `@angular/compiler-cli`, `@angular/language-service`, and **`ng-packagr` to ^20.x** (must match the major, or the library build breaks).
 
-**Hop 2: 19 → 20**
+Keep `typescript` at `~5.8.3` — that's exactly what v20 wants. `zone.js ~0.15.1` and `rxjs ^7.8.1` are already fine.
 
-7. Run:
-```
-ng update @angular/core@20 @angular/cli@20 ng-packagr@20
-```
-(`--force` again if peers block.)
+## 3. Ecosystem bumps
 
-8. `npm i primeng@20 primeicons@^7` — and if this repo configures a theme, swap `@primeng/themes` for `@primeuix/themes` (renamed in v20).
-9. Remaining deps in one pass: `@fortawesome/angular-fontawesome@^2`, `@ngx-translate/core@^16`, dev-side `jest-preset-angular@^14.6`, and the seven `@angular-eslint/*` packages to `^20` (they'll want `eslint@9` + `@typescript-eslint@8` — if lint config fights you, park it, it doesn't block builds).
-10. Edit by hand: `projects/ng-wings/package.json` → peerDependencies to `^20.0.0`; root package.json → `"engines": {"node": ">=20.19"}`, version to `20.0.0-SNAPSHOT`.
-11. Verify all four: `npm run build`, `build:showcase`, `test`, `test:showcase`.
-12. Publish the snapshot to Artifactory, then point wings-front at it.
+| Package | 19 → 20 |
+|---|---|
+| `primeng` | ^19.1.4 → ^20.x (biggest job — see below) |
+| `@fortawesome/angular-fontawesome` | ^1.0.0 → ^2.x |
+| `@ngx-translate/core` | ^16.0.4 → ^17.x |
+| `jest-preset-angular` | ^14.6.2 → ^15.x |
+| `@angular-eslint/*` | ^19.8.1 → ^20.x |
 
-**Trouble spots to recognize:**
-- `angular2-multiselect-dropdown` won't declare v20 support — `--legacy-peer-deps` gets you through; the real fix is replacing it with PrimeNG's `p-multiSelect`.
-- 404s during `ng update` mean Artifactory hasn't mirrored the v20 packages yet — registry team's problem, not yours.
-- AccordionTab warnings → migrate to the `p-accordion-panel` / header / content structure while you're in here.
+Verify each against its own compat table rather than trusting me on the exact minor — I'm going from memory here.
 
-Start with step 1 and tell me what step 4 outputs — that's where the first surprises usually show up.
+Two warnings: `@angular-eslint` 20 pushes ESLint 9 + flat config, and you're on ESLint 8.57 (which is EOL anyway) with `.eslintrc`. That's its own PR — don't tangle it with the Angular jump. And `angular2-multiselect-dropdown` will never resolve peers; this is the upgrade to finally swap it for PrimeNG MultiSelect.
+
+## 4. PrimeNG 20 — plan for real work
+
+This is where most of your time goes:
+
+- Theming moved from `@primeng/themes` to **`@primeuix/themes`** (you don't have the former listed, so check whether wings-front owns that config).
+- The components deprecated in v19 are gone in v20: `p-dropdown` → `p-select`, `p-calendar` → `p-datepicker`, `p-inputSwitch` → `p-toggleswitch`, `p-overlayPanel` → `p-popover`, `p-sidebar` → `p-drawer`, `p-messages` → `p-message`, TabView → Tabs. Your AccordionTab migration already landed, so that one's paid off.
+- Regenerate the patch: check first whether the `clearFilterValues()` type guard is still needed in 20.x. If it is, regenerate against the real 20.x tarball and keep `*.patch text eol=lf` in `.gitattributes` so it doesn't break on Git Bash again.
+
+## 5. Library-specific (don't skip)
+
+In `projects/ng-wings/package.json`: bump `peerDependencies` to `^20.0.0` and the version to `20.0.0`.
+
+**Sequencing matters here.** A library built with ng-packagr 20 emits Angular 20 partial-Ivy output that an Angular 19 app *cannot* consume. So wings-front has to upgrade in lockstep — publish the v20 `ng-wings` to your internal registry only when wings-front's branch is ready to take it.
+
+## 6. Expect these at build time
+
+- `ng-reflect-*` attributes are gone in dev mode — any test asserting on them fails.
+- `TestBed.flushEffects()` → `TestBed.tick()`.
+- `platformBrowserDynamic()` is deprecated; `platformBrowser().bootstrapModule()` from `@angular/platform-browser` is the replacement. Deprecated, not removed, so it won't block you.
+- `NgIf`/`NgFor`/`NgSwitch` are now soft-deprecated in favour of `@if`/`@for`. Optional, and `ng generate @angular/core:control-flow` will do it — but run it as a separate commit, not inside this one.
+
+One last thing: v20 is in LTS now, not current. Doing 19→20 first is still correct (never skip a major), but budget for a follow-up.
+
+Want me to sketch the exact `package.json` diff, or work through the PrimeNG 20 component migration list against your codebase?
