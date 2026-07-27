@@ -61,3 +61,142 @@ In `projects/ng-wings/package.json`: bump `peerDependencies` to `^20.0.0` and th
 One last thing: v20 is in LTS now, not current. Doing 19→20 first is still correct (never skip a major), but budget for a follow-up.
 
 Want me to sketch the exact `package.json` diff, or work through the PrimeNG 20 component migration list against your codebase?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+All package.json edits via `npm pkg set` / `npm pkg delete` — no manual editing. You're on MINGW64, so single quotes work; these would need rewriting in PowerShell (`^` and `||` are escape chars there).
+
+## Phase 0
+
+```bash
+node -v
+git checkout -b feat/angular-20
+
+npm run build 2>&1 | tee ../base-build.log
+npm test 2>&1 | tee ../base-test.log
+npm run build:showcase 2>&1 | tee ../base-showcase.log
+```
+
+Skip patch-package without editing anything — just add the flag to installs for the duration:
+
+```bash
+npm ci --ignore-scripts
+```
+
+(If you'd rather remove the hook: `npm pkg get scripts.postinstall` to record it, `npm pkg delete scripts.postinstall`, restore later with `npm pkg set scripts.postinstall="patch-package"`.)
+
+## Phase 1
+
+```bash
+grep -rn "angular2-multiselect-dropdown" projects/ src/
+npm uninstall angular2-multiselect-dropdown          # only if zero hits
+
+npm pkg set version=20.0.0-SNAPSHOT
+npm pkg set 'engines.node=^20.19.0 || ^22.12.0 || ^24.0.0'
+
+npm config delete always-auth --location=project
+```
+
+## Phase 2
+
+```bash
+npx ng update @angular/core@20 @angular/cli@20 --force
+```
+
+That should carry the whole `@angular/*` group (compiler-cli, language-service, platform-browser*, router, forms…) plus `@angular-devkit/build-angular`. Verify rather than assume:
+
+```bash
+npx ng version
+npm ls @angular/core
+npm outdated | grep -E "@angular|ng-packagr"
+```
+
+Anything left behind, install explicitly:
+
+```bash
+npm i -D ng-packagr@^20 @angular-devkit/build-angular@^20
+npm i -D @angular/compiler-cli@^20 @angular/language-service@^20
+```
+
+`ng-packagr` may or may not respond to `ng update` — `npm i -D` is the reliable route either way. Leave TypeScript alone (`~5.8.3` is what v20 wants).
+
+Library peer deps — `npm pkg` acts on the cwd's package.json, so cd in first:
+
+```bash
+cd projects/ng-wings
+npm pkg get peerDependencies              # see what's actually declared
+npm pkg set 'peerDependencies.@angular/core=^20.0.0'
+npm pkg set 'peerDependencies.@angular/common=^20.0.0'
+npm pkg set version=20.0.0
+cd ../..
+```
+
+Repeat the `peerDependencies.*` line for each `@angular/*` entry that `get` returned.
+
+```bash
+rm -rf node_modules package-lock.json
+npm install --ignore-scripts
+```
+
+## Phase 3
+
+```bash
+npm run build            # library first — fix everything here
+npm run build:showcase   # then downstream
+```
+
+## Phase 4 (one commit per line)
+
+```bash
+npm i primeng@20 @primeuix/themes
+npm i primeicons@latest
+npm i @fortawesome/angular-fontawesome@^2
+npm i @ngx-translate/core@^17
+```
+
+Then the component sweep (`p-dropdown`→`p-select`, `p-calendar`→`p-datepicker`, `p-inputSwitch`→`p-toggleswitch`, `p-overlayPanel`→`p-popover`, `p-sidebar`→`p-drawer`, `p-messages`→`p-message`, TabView→Tabs) and the theming import move.
+
+Patch decision:
+
+```bash
+# still needed in 20.x?
+npx patch-package primeng            # regenerate against installed 20.x
+git check-attr text -- patches/primeng+20.x.patch   # confirm eol=lf
+# or, if upstream fixed it:
+npm uninstall patch-package && rm -rf patches/
+```
+
+## Phase 5
+
+```bash
+npm i -D jest-preset-angular@^15 ts-jest@latest @types/jest@latest
+npm test 2>&1 | tee ../post-test.log
+diff ../base-test.log ../post-test.log
+```
+
+Known breaks: `TestBed.flushEffects()` → `TestBed.tick()`, and any assertion on `ng-reflect-*`.
+
+## Phase 6 — defer
+
+ESLint 9 / flat config and the control-flow migration are separate PRs. Pin as-is.
+
+## Phase 7
+
+```bash
+npm ci && npm run build && npm test && npm run lint && npm run build:showcase
+npm publish                    # ng-wings@20.0.0 → internal registry
+npm audit                       # last, on a green tree — never --force mid-migration
+```
+
+wings-front's 19→20 branch starts only after that publish lands.
