@@ -143,6 +143,11 @@ Upgrade
 
 zone.js
 
+
+
+
+
+
 to latest
 
 0.15.x
@@ -246,3 +251,169 @@ Recommended Upgrade Order
 Since I know you’ve already gone through a difficult Angular 18 → 19 and PrimeNG migration, I would not use npm update or blindly upgrade everything to latest. Instead, I’d upgrade only to versions officially compatible with Angular 20 to minimize breaking changes.
 
 I can also ￼ prepare a fully updated package.json based on your current one, with every dependency pinned to the most appropriate Angular 20-compatible version. That will save a lot of trial and error during the migration.
+
+
+
+
+
+
+
+
+
+
+
+
+
+The good news is that PrimeNG 20 is intentionally designed to be a smooth upgrade from PrimeNG 19. Unlike the painful v18→v19 migration, the official migration guide states that there are no hard breaking changes in v20. Most changes are soft deprecations and modernization of APIs. 
+
+The main things your Roo Code agent should look for are:
+
+* Replace styleClass with the native class attribute on host-based PrimeNG components.
+* Replace deprecated pTemplate usage with Angular template reference syntax where applicable.
+* Replace @primeng/themes with @primeuix/themes.
+* Check deprecated component inputs such as:
+    * responsiveLayout on p-table
+    * dropdownAppendTo
+    * minLength on p-autoComplete
+    * badgeClass
+    * iconPos, icon, label, loadingIcon on p-button
+    * containerStyle / containerStyleClass
+    * plain
+    * preserveSpace
+* Replace any camelCase selectors with kebab-case where supported.
+* Remove any deprecated APIs that have replacements. 
+
+⸻
+
+Prompt for Roo Code
+
+You are a Senior Angular + PrimeNG migration engineer.
+Your task is to migrate this enterprise Angular application from PrimeNG 19 to PrimeNG 20.
+IMPORTANT:
+- DO NOT rewrite working code.
+- DO NOT change application behaviour.
+- DO NOT refactor unrelated code.
+- Only apply changes required for PrimeNG 20 compatibility.
+- Preserve formatting and comments.
+- After every change explain WHY it was made.
+Follow this migration checklist.
+STEP 1
+Scan the entire project.
+Find
+- HTML templates
+- TS files
+- SCSS
+- CSS
+- angular.json
+- package.json
+Identify every PrimeNG component and directive.
+Generate a migration report before modifying anything.
+--------------------------------------------------
+STEP 2
+Replace deprecated APIs.
+Replace
+styleClass
+with
+class
+ONLY on PrimeNG components that now use the host element.
+Example
+Before
+<p-select styleClass="w-full">
+After
+<p-select class="w-full">
+Do not replace styleClass on normal HTML elements.
+--------------------------------------------------
+STEP 3
+Search every template for
+pTemplate
+If the component documentation recommends the new template reference syntax, migrate it.
+Do not modify templates that are already valid.
+--------------------------------------------------
+STEP 4
+Search for deprecated inputs.
+Replace these if found
+responsiveLayout
+dropdownAppendTo
+minLength (AutoComplete)
+badgeClass
+iconPos
+loadingIcon
+icon
+label (Button)
+buttonProps
+plain
+containerStyle
+containerStyleClass
+preserveSpace
+text
+escape
+closable (Inplace)
+Only replace when the component is affected.
+--------------------------------------------------
+STEP 5
+Check p-table usage.
+If responsiveLayout is used
+remove it.
+Do not modify table logic.
+--------------------------------------------------
+STEP 6
+Check all PrimeNG imports.
+Ensure imports still exist in PrimeNG 20.
+Report missing imports.
+--------------------------------------------------
+STEP 7
+Check package.json.
+Replace
+@primeng/themes
+with
+@primeuix/themes
+if required.
+Keep versions compatible with Angular 20.
+--------------------------------------------------
+STEP 8
+Search for any component deprecated in PrimeNG.
+Examples
+Calendar
+Dropdown
+OverlayPanel
+Sidebar
+InputSwitch
+Do NOT rename automatically.
+Instead
+create a report listing
+File
+Line
+Recommended replacement
+--------------------------------------------------
+STEP 9
+Search for every PrimeNG component.
+Verify inputs
+outputs
+templates
+directives
+against PrimeNG 20 API.
+Only modify incompatible code.
+--------------------------------------------------
+STEP 10
+Run the Angular compiler.
+Fix compile errors one by one.
+Never suppress errors.
+--------------------------------------------------
+STEP 11
+Run ESLint.
+Fix only migration-related warnings.
+--------------------------------------------------
+STEP 12
+Provide a final report.
+Include
+Files changed
+Reason
+Deprecated APIs removed
+Potential manual review items
+Anything that could affect runtime behaviour
+Do NOT stop after package.json changes.
+The migration is complete only when the application builds successfully without PrimeNG migration errors.
+
+Since I’ve helped you with your PrimeNG 18→19 migration before, I’d make one addition for your project:
+
+You have many complex components such as p-table, row expansion, lazy loading, nested tables, and custom templates. Ask Roo Code to verify each PrimeNG component against the v20 API instead of doing blind search-and-replace, because those complex usages are where subtle issues are most likely to appear—even though v20 itself doesn’t introduce major breaking changes. 
