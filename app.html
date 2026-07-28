@@ -1,142 +1,248 @@
-You are a PrimeNG v17 to v18 migration expert. 
-Your task is to find and replace deprecated PrimeNG grid CSS 
-classes with PrimeFlex equivalents in Angular HTML templates.
+Yes. Looking at your package.json, this is not a simple Angular upgrade. You have around 80+ dependencies, and several of them are tightly coupled with Angular versions.
 
-## RULES:
-- Only modify class attributes in HTML templates (.html files)
-- Do NOT change TypeScript, SCSS, or logic
-- Preserve all other existing classes on the element
-- Do NOT add or remove HTML elements
+I recommend upgrading in phases instead of running npm update, otherwise you’ll end up with hundreds of peer dependency issues.
 
-## REPLACEMENT MAP (apply ALL of these):
+⸻
 
-### Grid Container:
-- "p-grid"               → "grid"
-- "p-grid p-nogutter"    → "grid p-0"
-- "p-grid p-fluid"       → "grid"  (add fluid to p-fluid component instead)
+Phase 1 - Upgrade Angular
 
-### Columns (replace p-col-N with col-N):
-- "p-col-1"  → "col-1"
-- "p-col-2"  → "col-2"
-- "p-col-3"  → "col-3"
-- "p-col-4"  → "col-4"
-- "p-col-5"  → "col-5"
-- "p-col-6"  → "col-6"
-- "p-col-7"  → "col-7"
-- "p-col-8"  → "col-8"
-- "p-col-9"  → "col-9"
-- "p-col-10" → "col-10"
-- "p-col-11" → "col-11"
-- "p-col-12" → "col-12"
+Update these first.
 
-### Responsive Breakpoints:
-- "p-sm-N"  → "col-12 sm:col-N"
-- "p-md-N"  → "col-12 md:col-N"
-- "p-lg-N"  → "col-12 lg:col-N"
-- "p-xl-N"  → "col-12 xl:col-N"
+ng update @angular/core@20 @angular/cli@20
 
-### Offsets:
-- "p-col-offset-N"  → "col-offset-N"
-- "p-md-offset-N"   → "md:col-offset-N"
-- "p-lg-offset-N"   → "lg:col-offset-N"
+Then update remaining Angular packages.
 
-### Spacing (Padding):
-- "p-p-0"   → "p-0"
-- "p-p-1"   → "p-1"
-- "p-p-2"   → "p-2"
-- "p-p-3"   → "p-3"
-- "p-px-N"  → "px-N"
-- "p-py-N"  → "py-N"
-- "p-pt-N"  → "pt-N"
-- "p-pb-N"  → "pb-N"
-- "p-pl-N"  → "pl-N"
-- "p-pr-N"  → "pr-N"
+npm install \
+@angular/animations@^20 \
+@angular/common@^20 \
+@angular/compiler@^20 \
+@angular/core@^20 \
+@angular/forms@^20 \
+@angular/platform-browser@^20 \
+@angular/platform-browser-dynamic@^20 \
+@angular/router@^20 \
+@angular/cdk@^20 \
+@angular/compiler-cli@^20 \
+@angular/language-service@^20 \
+@angular/build@^20 \
+@angular/cli@^20 --save
 
-### Spacing (Margin):
-- "p-m-0"   → "m-0"
-- "p-m-1"   → "m-1"
-- "p-m-2"   → "m-2"
-- "p-m-3"   → "m-3"
-- "p-mx-N"  → "mx-N"
-- "p-my-N"  → "my-N"
-- "p-mt-N"  → "mt-N"
-- "p-mb-N"  → "mb-N"
-- "p-ml-N"  → "ml-N"
-- "p-mr-N"  → "mr-N"
+⸻
 
-### Flexbox:
-- "p-d-flex"           → "flex"
-- "p-d-inline-flex"    → "inline-flex"
-- "p-jc-start"         → "justify-content-start"
-- "p-jc-end"           → "justify-content-end"
-- "p-jc-center"        → "justify-content-center"
-- "p-jc-between"       → "justify-content-between"
-- "p-jc-around"        → "justify-content-around"
-- "p-ai-start"         → "align-items-start"
-- "p-ai-end"           → "align-items-end"
-- "p-ai-center"        → "align-items-center"
-- "p-ai-stretch"       → "align-items-stretch"
-- "p-flex-row"         → "flex-row"
-- "p-flex-column"      → "flex-column"
-- "p-flex-wrap"        → "flex-wrap"
-- "p-flex-nowrap"      → "flex-nowrap"
-- "p-flex-1"           → "flex-1"
+Phase 2 - Update NgRx
 
-### Display:
-- "p-d-none"           → "hidden"
-- "p-d-block"          → "block"
-- "p-d-inline"         → "inline"
+Current
 
-### Text:
-- "p-text-left"        → "text-left"
-- "p-text-right"       → "text-right"
-- "p-text-center"      → "text-center"
-- "p-text-bold"        → "font-bold"
-- "p-text-italic"      → "font-italic"
-- "p-text-capitalize"  → "capitalize"
-- "p-text-uppercase"   → "uppercase"
-- "p-text-lowercase"   → "lowercase"
-- "p-text-nowrap"      → "white-space-nowrap"
+19.2.1
 
-### Width / Height:
-- "p-w-full"  → "w-full"
-- "p-h-full"  → "h-full"
+Upgrade
 
-## INPUT:
-[PASTE YOUR HTML TEMPLATE CODE HERE]
+@ngrx/component-store
+@ngrx/effects
+@ngrx/router-store
+@ngrx/store
+@ngrx/store-devtools
+@ngrx/schematics
 
-## OUTPUT FORMAT:
-1. Return the full updated HTML
-2. After the code, list every change made as:
-   - Line N: "old class" → "new class"
-3. Flag any class you were UNCERTAIN about with ⚠️
+to
 
-## EXAMPLE:
-Input:
-<div class="p-grid p-nogutter">
-  <div class="p-md-2 p-md-offset-1 p-text-center">
-    <label>Name</label>
-  </div>
-  <div class="p-md-3 p-d-flex p-ai-center">
-    <input />
-  </div>
-</div>
+^20
 
-Output:
-<div class="grid p-0">
-  <div class="col-12 md:col-2 md:col-offset-1 text-center">
-    <label>Name</label>
-  </div>
-  <div class="col-12 md:col-3 flex align-items-center">
-    <input />
-  </div>
-</div>
+Run
 
-Changes:
-- Line 1: "p-grid p-nogutter" → "grid p-0"
-- Line 2: "p-md-2"        → "col-12 md:col-2"
-- Line 2: "p-md-offset-1" → "md:col-offset-1"
-- Line 2: "p-text-center" → "text-center"
-- Line 5: "p-md-3"        → "col-12 md:col-3"
-- Line 5: "p-d-flex"      → "flex"
-- Line 5: "p-ai-center"   → "align-items-center"
+ng update @ngrx/store
+
+⸻
+
+Phase 3 - PrimeNG
+
+Current
+
+primeng 19.1.4
+
+Upgrade to
+
+20.x
+
+Also upgrade
+
+primeicons
+@primeng/themes
+
+Install
+
+npm install primeng@latest primeicons@latest @primeng/themes@latest
+
+This will likely require template changes because PrimeNG 20 has breaking changes.
+
+⸻
+
+Phase 4 - Angular ESLint
+
+Upgrade everything together.
+
+@angular-eslint/builder
+@angular-eslint/eslint-plugin
+@angular-eslint/eslint-plugin-template
+@angular-eslint/schematics
+@angular-eslint/template-parser
+
+Run
+
+ng update angular-eslint
+
+⸻
+
+Phase 5 - Jest
+
+Upgrade
+
+jest
+@types/jest
+jest-preset-angular
+jest-environment-jsdom
+@angular-builders/jest
+
+Latest compatible versions.
+
+⸻
+
+Phase 6 - TypeScript
+
+Angular 20 supports TS 5.9.
+
+Upgrade
+
+typescript
+
+to
+
+5.9.x
+
+⸻
+
+Phase 7 - RxJS
+
+Current
+
+7.8.1
+
+Upgrade
+
+7.8.2
+
+or latest 7.x.
+
+Do not install RxJS 8 yet.
+
+⸻
+
+Phase 8 - Zone.js
+
+Upgrade
+
+zone.js
+
+to latest
+
+0.15.x
+
+⸻
+
+Phase 9 - Bootstrap
+
+Upgrade
+
+bootstrap
+
+to
+
+5.3.x
+
+if compatible with your application.
+
+⸻
+
+Phase 10 - FontAwesome
+
+Upgrade
+
+@fortawesome/*
+
+to latest 6.x or 7.x.
+
+⸻
+
+Phase 11 - Miscellaneous
+
+Upgrade these packages to their latest compatible versions:
+
+lodash
+core-js
+tslib
+file-saver
+fast-json-patch
+hash.js
+cors
+copyfiles
+concurrently
+source-map-explorer
+ts-node
+eslint
+eslint-plugin-import
+eslint-config-prettier
+
+⸻
+
+Packages that may require migration
+
+These deserve extra attention because they often introduce breaking changes:
+
+* PrimeNG
+* PrimeIcons
+* @primeng/themes
+* angular2-multiselect-dropdown
+* ngx-translate
+* ngrx
+* jest-preset-angular
+* angular-eslint
+* bootstrap
+
+⸻
+
+Packages that are likely safe to update
+
+lodash
+core-js
+tslib
+copyfiles
+concurrently
+file-saver
+cors
+hash.js
+fast-json-patch
+source-map-explorer
+ts-node
+
+⸻
+
+Recommended Upgrade Order
+
+1. Node.js
+2. Angular CLI/Core
+3. Angular packages
+4. TypeScript
+5. RxJS
+6. NgRx
+7. Angular ESLint
+8. PrimeNG
+9. Bootstrap
+10. Jest
+11. Remaining dependencies
+12. npm audit fix
+13. Fix compilation errors
+14. Run tests
+
+Since I know you’ve already gone through a difficult Angular 18 → 19 and PrimeNG migration, I would not use npm update or blindly upgrade everything to latest. Instead, I’d upgrade only to versions officially compatible with Angular 20 to minimize breaking changes.
+
+I can also ￼ prepare a fully updated package.json based on your current one, with every dependency pinned to the most appropriate Angular 20-compatible version. That will save a lot of trial and error during the migration.
