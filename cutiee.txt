@@ -1,241 +1,74 @@
-# Role
-You are a senior Angular, TypeScript, and TinyMCE engineer specializing in debugging regressions after large refactoring efforts.
+You are a senior Angular, TypeScript, and TinyMCE developer.
 
-# Objective
-A reusable TinyMCE editor component has been created and is now shared between Clause Management and Template Management. After this refactoring, multiple existing features have stopped working or their behavior has changed.
+## Issue Description
 
-Your task is to perform a complete regression analysis and restore every broken functionality while preserving the reusable component architecture.
+We recently refactored our application by creating a common reusable TinyMCE editor component that is shared between Clause Management and Template Management.
+
+After this refactoring, an unexpected UI issue has been introduced.
+
+### Current Behavior (Incorrect)
+
+When opening the editor on some screens (especially Template Management/Create/Edit), the editor automatically displays a large palette/grid of green tags (chips) inside the editor area.
+
+This palette should never be displayed by default.
+
+Instead of opening with a clean editing area, the editor is populated with hundreds of green chips, making it unusable.
+
+This behavior did not exist before the reusable editor was introduced.
+
+### Expected Behavior
+
+The TinyMCE editor should:
+
+- Open with a clean, blank editing area.
+- Display only the toolbar and editor.
+- Show existing content only if content is explicitly provided.
+- Never automatically render a grid/palette of variables, chips, placeholders, or merge fields inside the editor.
+- Behave consistently across both Clause Management and Template Management.
+
+## Investigation Tasks
+
+Perform a complete root cause analysis.
+
+Check the following:
+
+1. Compare the reusable editor implementation with the previous implementation.
+2. Identify what code is injecting the green chips into the editor.
+3. Verify whether a custom TinyMCE plugin is rendering this palette.
+4. Check whether merge fields/variables are accidentally being rendered as editor content instead of being displayed in a separate panel or popup.
+5. Inspect all TinyMCE initialization code (`setup`, `init`, `init_instance_callback`, `setContent`, `insertContent`, etc.).
+6. Check whether default content is being assigned during initialization.
+7. Verify if any API response, service, or parent component is passing the variable list as editor content.
+8. Check whether `writeValue`, `patchValue`, `setValue`, or `ngOnChanges` is incorrectly setting the variable palette into the editor.
+9. Review custom toolbar buttons, plugins, and event handlers that interact with variables/placeholders.
+10. Verify whether shared state between Clause Management and Template Management is causing this issue.
+11. Ensure editor configuration is not being mutated across instances.
 
 ## Requirements
 
-Think like a senior engineer performing a production bug investigation.
+- Remove the unwanted green chip palette from the editor.
+- The editor should initialize with a clean editing area.
+- Do not remove legitimate variable/placeholder functionality if it is used elsewhere.
+- Preserve all existing TinyMCE features.
+- Maintain backward compatibility.
+- Ensure the fix works for both Clause Management and Template Management.
+- Ensure multiple editor instances continue to work correctly.
+- Do not introduce regressions while fixing this issue.
 
-Do NOT make assumptions.
-Do NOT rewrite the architecture unless absolutely necessary.
-Do NOT remove existing features to fix another issue.
+## Expected Deliverables
 
-Instead:
+For each issue found, provide:
 
-1. Understand the previous implementation.
-2. Compare it with the new reusable editor implementation.
-3. Identify every behavioral difference.
-4. Find the exact root cause of each regression.
-5. Apply the smallest possible fix.
-6. Verify that the fix does not introduce new regressions.
-
-## Investigation Checklist
-
-Review all files related to the reusable editor, including:
-
-- Shared TinyMCE component
-- Clause Management
-- Template Management
-- Parent components
-- Services
-- Utility functions
-- Directives
-- TinyMCE configuration
-- Event handlers
-- Custom plugins
-- Toolbar configuration
-
-Compare them with the previous implementation.
-
-## Verify all functionality
-
-Inspect and validate every feature, including but not limited to:
-
-### Editor Initialization
-- Editor creation
-- Configuration loading
-- Dynamic config merging
-- Input binding
-- Output events
-- Destroy/reinitialize
-- Multiple editor instances
-
-### Content Handling
-- Initial content
-- Content updates
-- ngModel/FormControl binding
-- Read-only mode
-- Placeholder
-- HTML preservation
-- Cursor position
-- Text selection
-- Focus restoration
-- Undo/Redo history
-
-### TinyMCE Events
-Verify every event:
-
-- init
-- change
-- input
-- keyup
-- keydown
-- click
-- focus
-- blur
-- NodeChange
-- SetContent
-- GetContent
-- ExecCommand
-- BeforeExecCommand
-- Paste
-- Drop
-
-Ensure none are lost after refactoring.
-
-### Custom Features
-
-Check every custom functionality including:
-
-- Continue Numbered List
-- Nested List continuation
-- Variable insertion
-- Merge fields
-- Template placeholders
-- Clause placeholders
-- Custom toolbar buttons
-- Context menu
-- Custom menu items
-- Image upload
-- File upload
-- Drag & drop
-- Keyboard shortcuts
-- Custom plugins
-
-### Lifecycle
-
-Verify behavior after:
-
-- Dialog reopen
-- Route change
-- Component recreation
-- Switching Clause ↔ Template
-- Data reload
-- API response
-- Change detection
-- Re-render
-- Editor destruction
-- Editor recreation
-
-### Angular
-
-Check:
-
-- @Input updates
-- @Output events
-- ChangeDetectionStrategy
-- Signals (if used)
-- Reactive Forms
-- Template-driven Forms
-- ViewChild usage
-- ContentChild usage
-- OnInit
-- AfterViewInit
-- OnDestroy
-- OnChanges
-
-### TinyMCE Configuration
-
-Verify:
-
-- Plugins
-- Toolbar
-- Menubar
-- Setup callback
-- Init callback
-- Custom commands
-- Custom buttons
-- Formatter
-- Serializer
-- Parser
-- Content CSS
-- Skin
-- Paste configuration
-
-### Regression Detection
-
-Search for:
-
-- Missing event subscriptions
-- Lost callbacks
-- Configuration overwritten
-- Default values changed
-- Shared mutable objects
-- Timing issues
-- Race conditions
-- Lifecycle issues
-- Null references
-- Incorrect editor instance usage
-- Async initialization problems
-- Memory leaks
-
-## Fixing Rules
-
-For every issue found:
-
-1. Explain what is broken.
-2. Explain why it broke.
-3. Identify the exact code responsible.
-4. Implement the minimal fix.
-5. Preserve existing architecture.
-6. Avoid duplicate code.
-7. Avoid unnecessary refactoring.
-8. Maintain backward compatibility.
-9. Verify both Clause Management and Template Management continue to work.
-
-## Validation
-
-After each fix, verify:
-
-✓ Existing functionality still works
-
-✓ No new regressions
-
-✓ Clause Management works
-
-✓ Template Management works
-
-✓ Multiple editor instances work
-
-✓ Re-render works
-
-✓ Editor lifecycle works
-
-✓ Toolbar works
-
-✓ Events work
-
-✓ Custom plugins work
-
-✓ Lists work correctly
-
-✓ Variables work correctly
-
-✓ Cursor behavior is preserved
-
-## Output Format
-
-For every issue provide:
-
-### Issue
-Description
-
-### Root Cause
-Technical explanation
-
-### Files Affected
-
-### Code Changes
-
-### Why This Fix Works
-
-### Regression Tests Performed
-
-### Result
-PASS / FAIL
-
-Do not stop after fixing the first issue. Continue until you have audited the entire reusable TinyMCE implementation and confirmed that all previously supported functionality has been restored without introducing regressions.
+1. Root cause analysis.
+2. Files affected.
+3. Exact code changes.
+4. Explanation of why the issue occurred.
+5. Explanation of why the fix resolves it.
+6. Regression tests performed.
+7. Confirmation that:
+   - The editor opens with a clean blank editing area.
+   - No unwanted chip palette is displayed.
+   - Variable insertion still works where intended.
+   - Clause Management works correctly.
+   - Template Management works correctly.
+   - No existing TinyMCE functionality has been broken.
