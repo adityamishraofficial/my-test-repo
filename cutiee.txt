@@ -1,74 +1,11 @@
-You are a senior Angular, TypeScript, and TinyMCE developer.
+Understand the previous implementation.
 
-## Issue Description
+2. Compare it with the new reusable editor implementation.
 
-We recently refactored our application by creating a common reusable TinyMCE editor component that is shared between Clause Management and Template Management.
+3. Identify every behavioral difference.
 
-After this refactoring, an unexpected UI issue has been introduced.
+4. Find the exact root cause of each regression.
 
-### Current Behavior (Incorrect)
+5. Apply the smallest possible fix.
 
-When opening the editor on some screens (especially Template Management/Create/Edit), the editor automatically displays a large palette/grid of green tags (chips) inside the editor area.
-
-This palette should never be displayed by default.
-
-Instead of opening with a clean editing area, the editor is populated with hundreds of green chips, making it unusable.
-
-This behavior did not exist before the reusable editor was introduced.
-
-### Expected Behavior
-
-The TinyMCE editor should:
-
-- Open with a clean, blank editing area.
-- Display only the toolbar and editor.
-- Show existing content only if content is explicitly provided.
-- Never automatically render a grid/palette of variables, chips, placeholders, or merge fields inside the editor.
-- Behave consistently across both Clause Management and Template Management.
-
-## Investigation Tasks
-
-Perform a complete root cause analysis.
-
-Check the following:
-
-1. Compare the reusable editor implementation with the previous implementation.
-2. Identify what code is injecting the green chips into the editor.
-3. Verify whether a custom TinyMCE plugin is rendering this palette.
-4. Check whether merge fields/variables are accidentally being rendered as editor content instead of being displayed in a separate panel or popup.
-5. Inspect all TinyMCE initialization code (`setup`, `init`, `init_instance_callback`, `setContent`, `insertContent`, etc.).
-6. Check whether default content is being assigned during initialization.
-7. Verify if any API response, service, or parent component is passing the variable list as editor content.
-8. Check whether `writeValue`, `patchValue`, `setValue`, or `ngOnChanges` is incorrectly setting the variable palette into the editor.
-9. Review custom toolbar buttons, plugins, and event handlers that interact with variables/placeholders.
-10. Verify whether shared state between Clause Management and Template Management is causing this issue.
-11. Ensure editor configuration is not being mutated across instances.
-
-## Requirements
-
-- Remove the unwanted green chip palette from the editor.
-- The editor should initialize with a clean editing area.
-- Do not remove legitimate variable/placeholder functionality if it is used elsewhere.
-- Preserve all existing TinyMCE features.
-- Maintain backward compatibility.
-- Ensure the fix works for both Clause Management and Template Management.
-- Ensure multiple editor instances continue to work correctly.
-- Do not introduce regressions while fixing this issue.
-
-## Expected Deliverables
-
-For each issue found, provide:
-
-1. Root cause analysis.
-2. Files affected.
-3. Exact code changes.
-4. Explanation of why the issue occurred.
-5. Explanation of why the fix resolves it.
-6. Regression tests performed.
-7. Confirmation that:
-   - The editor opens with a clean blank editing area.
-   - No unwanted chip palette is displayed.
-   - Variable insertion still works where intended.
-   - Clause Management works correctly.
-   - Template Management works correctly.
-   - No existing TinyMCE functionality has been broken.
+6. Verify that the fix does not introduce new regressions
