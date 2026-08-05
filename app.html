@@ -1,419 +1,179 @@
-Yes. Looking at your package.json, this is not a simple Angular upgrade. You have around 80+ dependencies, and several of them are tightly coupled with Angular versions.
+Multi-Client Architecture (Mandatory Requirement)
 
-I recommend upgrading in phases instead of running npm update, otherwise you’ll end up with hundreds of peer dependency issues.
+This application must be designed as a single local AI platform that can be accessed from both:
 
-⸻
+1. A modern browser-based ChatGPT-style web application.
+2. The Roo Code VS Code extension.
 
-Phase 1 - Upgrade Angular
+Both clients must use the same local backend and the same GLM-5.2 model.
 
-Update these first.
+Primary Goal
 
-ng update @angular/core@20 @angular/cli@20
+Implement a single local AI server that exposes an OpenAI-compatible API.
 
-Then update remaining Angular packages.
+The browser UI and Roo Code must communicate with this server simultaneously.
 
-npm install \
-@angular/animations@^20 \
-@angular/common@^20 \
-@angular/compiler@^20 \
-@angular/core@^20 \
-@angular/forms@^20 \
-@angular/platform-browser@^20 \
-@angular/platform-browser-dynamic@^20 \
-@angular/router@^20 \
-@angular/cdk@^20 \
-@angular/compiler-cli@^20 \
-@angular/language-service@^20 \
-@angular/build@^20 \
-@angular/cli@^20 --save
+There must never be duplicate business logic.
 
-⸻
+The backend is the single source of truth.
 
-Phase 2 - Update NgRx
+Client 1 - Browser Application
 
-Current
+Develop a ChatGPT/Claude-style web application with:
 
-19.2.1
+* Chat interface
+* Conversation history
+* Markdown rendering
+* Syntax highlighting
+* Streaming responses
+* Code blocks
+* Mermaid diagrams
+* LaTeX rendering
+* File uploads
+* Drag-and-drop
+* Project explorer
+* Monaco Editor
+* Integrated terminal
+* Diff viewer
+* Multi-tab workspace
+* Dark and light themes
+* Responsive UI
+* Session management
+* Local authentication (optional)
+* Settings page
+* Model management
+* Prompt library
+* Agent mode
+* Workspace management
 
-Upgrade
+The browser should communicate exclusively with the local backend.
 
-@ngrx/component-store
-@ngrx/effects
-@ngrx/router-store
-@ngrx/store
-@ngrx/store-devtools
-@ngrx/schematics
-
-to
-
-^20
-
-Run
-
-ng update @ngrx/store
+No external APIs may be used.
 
 ⸻
 
-Phase 3 - PrimeNG
+Client 2 - Roo Code Integration
 
-Current
+The backend must be fully compatible with the Roo Code extension.
 
-primeng 19.1.4
+The user should simply configure Roo Code to point to the local server.
 
-Upgrade to
+Example:
 
-20.x
+Base URL:
+http://localhost:8000/v1
 
-Also upgrade
+API Key:
+Any placeholder value accepted by the local server (or configurable authentication).
 
-primeicons
-@primeng/themes
+The backend must support:
 
-Install
+* Streaming
+* Chat Completions
+* Tool Calling
+* Function Calling
+* JSON Responses
+* Long Context
+* Multi-turn Conversations
+* Code Generation
+* Code Editing
+* Repository Analysis
+* Repository Refactoring
 
-npm install primeng@latest primeicons@latest @primeng/themes@latest
-
-This will likely require template changes because PrimeNG 20 has breaking changes.
-
-⸻
-
-Phase 4 - Angular ESLint
-
-Upgrade everything together.
-
-@angular-eslint/builder
-@angular-eslint/eslint-plugin
-@angular-eslint/eslint-plugin-template
-@angular-eslint/schematics
-@angular-eslint/template-parser
-
-Run
-
-ng update angular-eslint
+No adapters or modifications to Roo Code should be required.
 
 ⸻
 
-Phase 5 - Jest
+Shared Backend
 
-Upgrade
+The backend must be shared by both the browser application and Roo Code.
 
-jest
-@types/jest
-jest-preset-angular
-jest-environment-jsdom
-@angular-builders/jest
+Responsibilities include:
 
-Latest compatible versions.
+* Prompt construction
+* Conversation memory
+* Context management
+* Model inference
+* Tool execution
+* File system access
+* Workspace indexing
+* Repository search
+* Agent orchestration
+* Streaming
+* Settings
+* Authentication (if enabled)
 
-⸻
-
-Phase 6 - TypeScript
-
-Angular 20 supports TS 5.9.
-
-Upgrade
-
-typescript
-
-to
-
-5.9.x
+Business logic must exist only once.
 
 ⸻
 
-Phase 7 - RxJS
+OpenAI-Compatible API
 
-Current
+Expose the following endpoints:
 
-7.8.1
+* GET /v1/models
+* POST /v1/chat/completions
+* POST /v1/completions
+* POST /v1/embeddings (future support)
+* POST /v1/responses (future support)
+* GET /health
+* GET /version
 
-Upgrade
-
-7.8.2
-
-or latest 7.x.
-
-Do not install RxJS 8 yet.
-
-⸻
-
-Phase 8 - Zone.js
-
-Upgrade
-
-zone.js
-
-
-
-
-
-
-to latest
-
-0.15.x
+The response format must be fully compatible with the OpenAI API so Roo Code can connect without changes.
 
 ⸻
 
-Phase 9 - Bootstrap
+Local-Only Operation
 
-Upgrade
+Everything must run locally.
 
-bootstrap
+No cloud services.
 
-to
+No OpenAI.
 
-5.3.x
+No Anthropic.
 
-if compatible with your application.
+No Google.
 
-⸻
+No Azure.
 
-Phase 10 - FontAwesome
+No telemetry.
 
-Upgrade
+No analytics.
 
-@fortawesome/*
+No external inference.
 
-to latest 6.x or 7.x.
-
-⸻
-
-Phase 11 - Miscellaneous
-
-Upgrade these packages to their latest compatible versions:
-
-lodash
-core-js
-tslib
-file-saver
-fast-json-patch
-hash.js
-cors
-copyfiles
-concurrently
-source-map-explorer
-ts-node
-eslint
-eslint-plugin-import
-eslint-config-prettier
+No user code should ever leave the local machine.
 
 ⸻
 
-Packages that may require migration
+Extensible Model Architecture
 
-These deserve extra attention because they often introduce breaking changes:
+Implement a provider abstraction so additional local models can be added easily.
 
-* PrimeNG
-* PrimeIcons
-* @primeng/themes
-* angular2-multiselect-dropdown
-* ngx-translate
-* ngrx
-* jest-preset-angular
-* angular-eslint
-* bootstrap
+Initially implement GLM-5.2.
 
-⸻
+The architecture should also support:
 
-Packages that are likely safe to update
+* Qwen3-Coder
+* Qwen2.5-Coder
+* DeepSeek Coder
+* Devstral
+* Llama
+* Gemma
+* Phi
 
-lodash
-core-js
-tslib
-copyfiles
-concurrently
-file-saver
-cors
-hash.js
-fast-json-patch
-source-map-explorer
-ts-node
+The active model should be selectable at runtime without code changes.
 
 ⸻
 
-Recommended Upgrade Order
+Final Deliverable
 
-1. Node.js
-2. Angular CLI/Core
-3. Angular packages
-4. TypeScript
-5. RxJS
-6. NgRx
-7. Angular ESLint
-8. PrimeNG
-9. Bootstrap
-10. Jest
-11. Remaining dependencies
-12. npm audit fix
-13. Fix compilation errors
-14. Run tests
+The completed project should function as a self-hosted AI coding platform that combines the capabilities of:
 
-Since I know you’ve already gone through a difficult Angular 18 → 19 and PrimeNG migration, I would not use npm update or blindly upgrade everything to latest. Instead, I’d upgrade only to versions officially compatible with Angular 20 to minimize breaking changes.
+* ChatGPT (browser interface)
+* Claude Code (coding workflows)
+* Roo Code (VS Code integration)
+* Cursor (AI-assisted development)
 
-I can also ￼ prepare a fully updated package.json based on your current one, with every dependency pinned to the most appropriate Angular 20-compatible version. That will save a lot of trial and error during the migration.
-
-
-
-
-
-
-
-
-
-
-
-
-
-The good news is that PrimeNG 20 is intentionally designed to be a smooth upgrade from PrimeNG 19. Unlike the painful v18→v19 migration, the official migration guide states that there are no hard breaking changes in v20. Most changes are soft deprecations and modernization of APIs. 
-
-The main things your Roo Code agent should look for are:
-
-* Replace styleClass with the native class attribute on host-based PrimeNG components.
-* Replace deprecated pTemplate usage with Angular template reference syntax where applicable.
-* Replace @primeng/themes with @primeuix/themes.
-* Check deprecated component inputs such as:
-    * responsiveLayout on p-table
-    * dropdownAppendTo
-    * minLength on p-autoComplete
-    * badgeClass
-    * iconPos, icon, label, loadingIcon on p-button
-    * containerStyle / containerStyleClass
-    * plain
-    * preserveSpace
-* Replace any camelCase selectors with kebab-case where supported.
-* Remove any deprecated APIs that have replacements. 
-
-⸻
-
-Prompt for Roo Code
-
-You are a Senior Angular + PrimeNG migration engineer.
-Your task is to migrate this enterprise Angular application from PrimeNG 19 to PrimeNG 20.
-IMPORTANT:
-- DO NOT rewrite working code.
-- DO NOT change application behaviour.
-- DO NOT refactor unrelated code.
-- Only apply changes required for PrimeNG 20 compatibility.
-- Preserve formatting and comments.
-- After every change explain WHY it was made.
-Follow this migration checklist.
-STEP 1
-Scan the entire project.
-Find
-- HTML templates
-- TS files
-- SCSS
-- CSS
-- angular.json
-- package.json
-Identify every PrimeNG component and directive.
-Generate a migration report before modifying anything.
---------------------------------------------------
-STEP 2
-Replace deprecated APIs.
-Replace
-styleClass
-with
-class
-ONLY on PrimeNG components that now use the host element.
-Example
-Before
-<p-select styleClass="w-full">
-After
-<p-select class="w-full">
-Do not replace styleClass on normal HTML elements.
---------------------------------------------------
-STEP 3
-Search every template for
-pTemplate
-If the component documentation recommends the new template reference syntax, migrate it.
-Do not modify templates that are already valid.
---------------------------------------------------
-STEP 4
-Search for deprecated inputs.
-Replace these if found
-responsiveLayout
-dropdownAppendTo
-minLength (AutoComplete)
-badgeClass
-iconPos
-loadingIcon
-icon
-label (Button)
-buttonProps
-plain
-containerStyle
-containerStyleClass
-preserveSpace
-text
-escape
-closable (Inplace)
-Only replace when the component is affected.
---------------------------------------------------
-STEP 5
-Check p-table usage.
-If responsiveLayout is used
-remove it.
-Do not modify table logic.
---------------------------------------------------
-STEP 6
-Check all PrimeNG imports.
-Ensure imports still exist in PrimeNG 20.
-Report missing imports.
---------------------------------------------------
-STEP 7
-Check package.json.
-Replace
-@primeng/themes
-with
-@primeuix/themes
-if required.
-Keep versions compatible with Angular 20.
---------------------------------------------------
-STEP 8
-Search for any component deprecated in PrimeNG.
-Examples
-Calendar
-Dropdown
-OverlayPanel
-Sidebar
-InputSwitch
-Do NOT rename automatically.
-Instead
-create a report listing
-File
-Line
-Recommended replacement
---------------------------------------------------
-STEP 9
-Search for every PrimeNG component.
-Verify inputs
-outputs
-templates
-directives
-against PrimeNG 20 API.
-Only modify incompatible code.
---------------------------------------------------
-STEP 10
-Run the Angular compiler.
-Fix compile errors one by one.
-Never suppress errors.
---------------------------------------------------
-STEP 11
-Run ESLint.
-Fix only migration-related warnings.
---------------------------------------------------
-STEP 12
-Provide a final report.
-Include
-Files changed
-Reason
-Deprecated APIs removed
-Potential manual review items
-Anything that could affect runtime behaviour
-Do NOT stop after package.json changes.
-The migration is complete only when the application builds successfully without PrimeNG migration errors.
-
-Since I’ve helped you with your PrimeNG 18→19 migration before, I’d make one addition for your project:
-
-You have many complex components such as p-table, row expansion, lazy loading, nested tables, and custom templates. Ask Roo Code to verify each PrimeNG component against the v20 API instead of doing blind search-and-replace, because those complex usages are where subtle issues are most likely to appear—even though v20 itself doesn’t introduce major breaking changes. 
+All powered by a single local GLM-5.2 backend, accessible from both a browser and the Roo Code extension, with zero external dependencies after installation.
