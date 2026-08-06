@@ -1,291 +1,45 @@
-# Role
+You can give Qwen the following prompt:
 
-You are a Senior Angular, TypeScript, and TinyMCE architect with expertise in building reusable, production-grade UI components and performing safe large-scale refactoring.
+⸻
 
-# Objective
+Task: Identify and Fix documentStage = preview Rendering Issue
 
-I have discarded all previous changes and want to implement the reusable TinyMCE editor from scratch.
+There is a rendering issue in the Preview stage (documentStage === 'preview') that needs to be fixed without affecting any existing functionality.
 
-Currently, there are two separate TinyMCE implementations:
+Current Expected Behavior
 
-- Clause Management
-- Template Management
+Clause Status	Expected Output
+FULLY_SATISFIED	Display only the clause content. Do not display the clause title/name.
+PARTIALLY_SATISFIED	Display clause title + clause content.
+PARTIALLY_DISSATISFIED	Display nothing.
+FULLY_DISSATISFIED	Display nothing.
 
-Both implementations are stable and contain several custom features.
+Current Issue
 
-Your task is to create a single reusable TinyMCE editor component that can be used by both modules without changing any existing behavior.
+For documentStage === 'preview', all cases are working correctly except FULLY_SATISFIED.
 
-The final implementation must be clean, maintainable, configurable, and fully backward compatible.
+Currently, when a clause is FULLY_SATISFIED, the preview displays:
 
----
+* Clause Title ❌ (should not be displayed)
+* Clause Content ✅
 
-# Important Rules
+The expected behavior is:
 
-Do NOT rewrite the application.
+* Clause Title ❌
+* Clause Content ✅
 
-Do NOT simplify existing functionality.
+Only the clause content should be visible.
 
-Do NOT remove any feature.
+Requirements
 
-Do NOT introduce breaking changes.
+1. Identify where the preview rendering logic determines whether to display the clause title.
+2. Fix the logic so that:
+    * When documentStage === 'preview' and clause status is FULLY_SATISFIED, only the clause content is rendered.
+    * For all other statuses, retain the existing behavior.
+3. Do not modify the business logic used to determine clause satisfaction.
+4. Do not change any backend or API logic.
+5. Do not affect any functionality outside the Preview stage.
+6. Ensure there are no regressions in existing rendering behavior for other document stages or clause statuses.
+7. Before making changes, identify the root cause and update only the minimum amount of code necessary to resolve the issue.
 
-Do NOT hardcode module-specific logic inside the reusable component.
-
-Keep the reusable component generic and configurable.
-
-Preserve existing APIs wherever possible.
-
----
-
-# Phase 1 – Analyze Existing Implementations
-
-Before writing any code:
-
-1. Analyze the complete TinyMCE implementation used in Clause Management.
-2. Analyze the complete TinyMCE implementation used in Template Management.
-3. Compare both implementations.
-4. Identify:
-   - Common functionality
-   - Module-specific functionality
-   - Shared configuration
-   - Custom plugins
-   - Custom toolbar buttons
-   - Custom event handlers
-   - Variable insertion logic
-   - Placeholder handling
-   - Continue Numbered List feature
-   - Nested list handling
-   - Custom commands
-   - Image/File upload
-   - Context menu
-   - Keyboard shortcuts
-   - Editor lifecycle handling
-   - Validation
-   - Read-only behavior
-   - Editor initialization
-   - Content loading
-   - Content saving
-   - Any differences between the two implementations
-
-Do not start refactoring until the complete analysis is finished.
-
----
-
-# Phase 2 – Design the Reusable Component
-
-Create a reusable TinyMCE component that supports configuration through @Input() and emits events through @Output().
-
-The component should expose configurable options instead of embedding business logic.
-
-Examples include:
-
-- Initial content
-- Editor configuration
-- Toolbar
-- Plugins
-- Height
-- Read-only mode
-- Placeholder
-- Variable configuration
-- Custom buttons
-- Upload handlers
-- Event callbacks
-
-Avoid duplication while keeping the component generic.
-
----
-
-# Phase 3 – Refactor
-
-Replace the existing TinyMCE implementations in:
-
-- Clause Management
-- Template Management
-
-Both modules must use the new reusable component.
-
-Remove duplicate code only after confirming that the reusable component provides identical behavior.
-
----
-
-# Functional Requirements
-
-The reusable component must preserve every existing functionality, including but not limited to:
-
-## Editor Initialization
-
-- Proper initialization
-- Dynamic configuration
-- Lazy loading
-- Multiple editor instances
-- Proper destruction
-- Reinitialization
-
-## Content Handling
-
-- Initial content
-- Content updates
-- Reactive Forms
-- Template-driven Forms
-- writeValue
-- registerOnChange
-- registerOnTouched
-- setDisabledState
-- HTML preservation
-- Focus handling
-- Cursor position
-- Text selection
-- Undo
-- Redo
-
-## TinyMCE Events
-
-Ensure every existing event continues working:
-
-- init
-- change
-- input
-- keyup
-- keydown
-- click
-- blur
-- focus
-- NodeChange
-- SetContent
-- GetContent
-- ExecCommand
-- BeforeExecCommand
-- Paste
-- Drop
-
----
-
-## Preserve All Existing Features
-
-Verify and preserve every current feature, including:
-
-- Continue Numbered List
-- Nested list continuation
-- Variable insertion
-- Merge field insertion
-- Placeholder insertion
-- Custom toolbar buttons
-- Context menu
-- Custom plugins
-- Image upload
-- File upload
-- Drag & Drop
-- Keyboard shortcuts
-- Copy/Paste behavior
-- Lists
-- Tables
-- Formatting
-- Existing TinyMCE commands
-
-No functionality should regress.
-
----
-
-# Lifecycle
-
-Ensure proper behavior after:
-
-- Route changes
-- Dialog open/close
-- Component recreation
-- Edit mode
-- Create mode
-- Switching between Clause and Template Management
-- API response
-- Dynamic input changes
-- Multiple editors on the same page
-
----
-
-# Performance
-
-The reusable component should:
-
-- Avoid duplicate initialization
-- Avoid unnecessary re-renders
-- Prevent memory leaks
-- Properly destroy TinyMCE instances
-- Avoid duplicate event registration
-- Prevent shared mutable state
-- Minimize change detection overhead
-
----
-
-# Backward Compatibility
-
-Existing screens should behave exactly as before.
-
-Users should not notice any behavioral differences after the refactoring.
-
-The reusable component must preserve:
-
-- Existing UI
-- Existing toolbar
-- Existing keyboard behavior
-- Existing editor content
-- Existing APIs
-- Existing validations
-
----
-
-# Validation
-
-After implementation, verify:
-
-✓ Clause Management works exactly as before.
-
-✓ Template Management works exactly as before.
-
-✓ Continue Numbered List works.
-
-✓ Nested list continuation works.
-
-✓ Variable insertion works.
-
-✓ Placeholder insertion works.
-
-✓ Toolbar works.
-
-✓ Custom plugins work.
-
-✓ Image/File upload works.
-
-✓ Editor lifecycle works.
-
-✓ Multiple editor instances work.
-
-✓ Read-only mode works.
-
-✓ Create/Edit modes work.
-
-✓ No unexpected UI elements appear.
-
-✓ No console errors.
-
-✓ No memory leaks.
-
-✓ No functionality regression.
-
----
-
-# Deliverables
-
-Provide:
-
-1. Architecture of the reusable component.
-2. Files to be created.
-3. Files to be modified.
-4. Step-by-step implementation plan.
-5. Code changes for each file.
-6. Explanation of every design decision.
-7. Root-cause analysis if any differences are found between Clause and Template implementations.
-8. A regression checklist confirming that every existing feature has been verified after refactoring.
-
-# Success Criteria
-
-The final solution must result in a single reusable TinyMCE editor component used by both Clause Management and Template Management while preserving 100% of the existing functionality and behavior. The refactoring should improve maintainability, eliminate duplicate code, and introduce no regressions.
+The fix should be targeted, maintainable, and preserve all current functionality except for correcting the FULLY_SATISFIED preview rendering behavior.
