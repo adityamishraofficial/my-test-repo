@@ -1,120 +1,139 @@
-Yes. I reviewed both screenshots of your package.json. You are currently on Angular 20.3.x, and you can upgrade directly from Angular 20 → Angular 21. You do not need to go through any intermediate version.
+Yes — the screenshot makes the problem clear. Do not use --force yet. Your Angular 20 → 21 update is being blocked by several peer-dependency conflicts.
 
-Angular officially recommends ng update for a one-major-version upgrade. 
+What is actually blocking you
 
-Your important current versions
+The most important one is:
 
-From your package:
+primeng@20.4.0
+  requires Angular >=20.0.4 <21.0.0
 
-Package	Current	Angular 21 target
-@angular/core	20.3.26	21.x
-@angular/cli	20.3.32	21.x
-@angular/build	20.3.32	21.x
-@angular/compiler	20.3.26	21.x
-@angular/compiler-cli	20.3.26	21.x
-@angular/language-service	20.3.26	21.x
-TypeScript	5.8.3	5.9.x
-RxJS	7.8.1	Keep 7.8.x
-@angular-eslint/*	19.8.1	21.x
-PrimeNG	20.4.0	21.x recommended
-@primeuix/themes	3.0.0	Keep/update as required by PrimeNG 21
-zone.js	0.15.1	Check via Angular update
+But Angular 21 wants:
 
-Angular 21 requires TypeScript >=5.9.0 <6.0.0; your current TypeScript 5.8.3 therefore needs to move up. Node.js must be 20.19+, 22.12+, or 24+. RxJS 7.8.x is already compatible. 
+@angular/* 21.2.19
+
+So your current combination:
+
+Angular 20.3.x
+PrimeNG 20.4.0
+
+cannot simply become:
+
+Angular 21.x
+PrimeNG 20.4.0   ❌
+
+You need:
+
+Angular 21.x
+PrimeNG 21.x     ✅
+
+There are also two other issues visible in the screenshot:
+
+typescript
+current: 5.8.3
+Angular 21: >=5.9.0 <6.0.0
+
+and:
+
+jest-preset-angular
+current: 14.6.2
+Angular 21: >=15.0.0 <21.0.0
 
 ⸻
 
-Recommended upgrade path
+What I recommend for your project
 
-Because your application is already on Angular 20.3, I would do this in stages.
+Because you have already had PrimeNG migration problems, don’t force Angular 21 on top of PrimeNG 20.
 
-Step 1 — Create a clean Git checkpoint
+Instead, upgrade the related packages in a controlled way.
+
+1. First update your branch
+
+You are already on:
+
+feature/DW-024543
+
+Make sure everything is committed:
 
 git status
+
+Then:
+
 git add .
-git commit -m "Before Angular 21 upgrade"
-
-Make sure the working tree is clean before running the migration.
+git commit -m "Before Angular 21 migration"
 
 ⸻
 
-Step 2 — Check Node and npm
+2. Upgrade PrimeNG first
 
-Run:
+You currently have:
 
-node -v
-npm -v
+"primeng": "^20.4.0"
 
-For Angular 21, I’d recommend:
+Change it to the Angular 21 compatible PrimeNG major:
 
-Node 22.x
+npm install primeng@^21 @primeuix/themes@latest primeicons@latest
 
-or newer supported Node.
+However, npm may complain because Angular is still 20 while PrimeNG 21 expects Angular 21.
 
-Angular 21 officially supports Node ^20.19.0, ^22.12.0, and ^24.0.0. 
+If that happens, don’t use --force globally.
 
-⸻
-
-Step 3 — Upgrade Angular Core + CLI
-
-Run:
-
-npx ng update @angular/core@^21 @angular/cli@^21
-
-Or, if your global CLI is already appropriate:
-
-ng update @angular/core@^21 @angular/cli@^21
-
-Do not use --force initially.
-
-Angular’s own recommended syntax for moving from one major version to the next is exactly this style of command. 
-
-The migration will update things such as:
-
-@angular/animations
-@angular/common
-@angular/compiler
-@angular/core
-@angular/forms
-@angular/platform-browser
-@angular/platform-browser-dynamic
-@angular/router
-@angular/compiler-cli
-@angular/cli
-@angular/build
-@angular-devkit/build-angular
-
-to Angular 21-compatible versions.
+Instead, I would temporarily update the relevant package versions together in package.json, then perform one clean install.
 
 ⸻
 
-Step 4 — TypeScript
+3. Change your package.json
 
-Your current:
+Your Angular dependencies should be changed from:
+
+"@angular/animations": "^20.3.26",
+"@angular/common": "^20.3.26",
+"@angular/compiler": "^20.3.26",
+"@angular/core": "^20.3.26",
+"@angular/forms": "^20.3.26",
+"@angular/platform-browser": "^20.3.26",
+"@angular/platform-browser-dynamic": "^20.3.26",
+"@angular/router": "^20.3.26"
+
+to:
+
+"@angular/animations": "^21.2.19",
+"@angular/common": "^21.2.19",
+"@angular/compiler": "^21.2.19",
+"@angular/core": "^21.2.19",
+"@angular/forms": "^21.2.19",
+"@angular/platform-browser": "^21.2.19",
+"@angular/platform-browser-dynamic": "^21.2.19",
+"@angular/router": "^21.2.19"
+
+But don’t manually change every Angular package blindly. The safer approach is to let ng update do the Angular migrations after resolving the peer dependencies.
+
+⸻
+
+4. TypeScript is important
+
+Your package currently has:
 
 "typescript": "~5.8.3"
 
-is too old for Angular 21.
+The error explicitly shows Angular 21 wants:
 
-Angular 21 requires:
+>=5.9.0 <6.0.0
 
-TypeScript >=5.9.0 <6.0.0
+So change this to:
 
-So after the Angular migration, check:
+"typescript": "~5.9.0"
 
-npm ls typescript
+Don’t install TypeScript 6.
 
-If Angular doesn’t automatically update it, install:
+The screenshot is telling you that npm was considering:
 
-npm install -D typescript@~5.9.0
+typescript 6.0.3
 
-I’d actually let the Angular migration choose the compatible version first rather than manually forcing it.
+which is not what you want.
 
 ⸻
 
-Step 5 — VERY IMPORTANT: Angular ESLint
-
-This is one of the things I noticed immediately in your package.
+5. Upgrade Angular ESLint
 
 You currently have:
 
@@ -124,13 +143,9 @@ You currently have:
 "@angular-eslint/schematics": "^19.8.1",
 "@angular-eslint/template-parser": "^19.8.1"
 
-Your Angular is 20, but your Angular ESLint is still 19.
+These are still Angular ESLint 19.
 
-For Angular 21, move these to 21.x.
-
-Angular ESLint intentionally aligns its major version with Angular/Angular CLI. 
-
-Run:
+For Angular 21, move them to 21:
 
 npm install -D \
   @angular-eslint/builder@^21 \
@@ -139,219 +154,131 @@ npm install -D \
   @angular-eslint/schematics@^21 \
   @angular-eslint/template-parser@^21
 
-Your existing:
-
-"eslint": "^8.57.1"
-
-is also something I’d address. Angular ESLint 21 supports the newer ESLint ecosystem; the Angular ESLint 21 releases moved to ESLint 10 support. 
-
-I would not blindly upgrade every ESLint package yet if your project has a complicated custom ESLint configuration. First get Angular 21 installed, then resolve ESLint cleanly.
-
 ⸻
 
-Step 6 — PrimeNG: this is important for your application
-
-You currently have:
-
-"primeng": "^20.4.0",
-"@primeuix/themes": "^3.0.0",
-"primeicons": "^8.0.0"
-
-Since you’ve previously had several PrimeNG migration issues, I would not randomly change PrimeNG while doing the Angular migration.
-
-However, now that PrimeNG 21 exists and specifically supports Angular 21, the clean target is:
-
-Angular 21
-+
-PrimeNG 21
-
-PrimeNG 21 explicitly supports Angular 21 and is currently at the 21.1.x line. 
-
-The good news is that PrimeNG says v21 is intended to be largely a drop-in replacement, with no API removals in v21. The main exception is animation customization: showTransitionOptions and hideTransitionOptions are deprecated/non-functional because PrimeNG moved to native CSS animations. 
-
-But I recommend doing this separately:
-
-First:
-
-Angular 20 + PrimeNG 20
-          ↓
-Angular 21 + PrimeNG 20
-
-Get the application compiling and tests passing.
-
-Then:
-
-Angular 21 + PrimeNG 20
-          ↓
-Angular 21 + PrimeNG 21
-
-This makes troubleshooting much easier.
-
-⸻
-
-Step 7 — Jest
+6. Upgrade Jest preset
 
 You have:
 
 "jest-preset-angular": "^14.6.2"
 
-This is another dependency I would not ignore.
+The error shows Angular 21 wants a newer version.
 
-Angular 21 support was added in jest-preset-angular 16.0.0. 
-
-You currently have a very old version:
-
-14.6.2
-
-I’d upgrade this after the Angular migration:
+Upgrade it:
 
 npm install -D jest-preset-angular@^16
 
-You can later move to the current 17.x if your Jest configuration supports its changes. Version 17 requires Angular 20+ and Node 20+. 
+You currently have:
 
-For the safest Angular 21 migration, I’d start with:
+"jest": "^29.6.1",
+"@types/jest": "^29.5.12",
+"ts-jest": "^29.1.1"
 
-jest-preset-angular 16.x
-
-rather than jumping unnecessarily to 17.
+I’d leave these alone initially. Don’t upgrade everything at once.
 
 ⸻
 
-Step 8 — ng-packagr
+7. ng-packagr
 
 You have:
 
 "ng-packagr": "^20.3.2"
 
-If this is used for your library build, it should also be moved to the Angular 21-compatible major.
+Move it to Angular 21-compatible 21.x:
 
-Check:
-
-npm view ng-packagr@21 peerDependencies
-
-Then install the compatible 21.x version.
+npm install -D ng-packagr@^21
 
 ⸻
 
-Step 9 — Clean installation
+8. Then clean install
 
-After all package changes:
+After the package changes:
 
 rm -rf node_modules package-lock.json
-npm cache verify
+
+Then:
+
 npm install
 
-Then:
-
-npm ls @angular/core
-npm ls @angular/cli
-npm ls typescript
-
-You want to see Angular 21 throughout.
-
-For example:
-
-@angular/core@21.x.x
-@angular/cli@21.x.x
-typescript@5.9.x
+At this point npm should resolve the dependency tree with Angular 21 + PrimeNG 21.
 
 ⸻
 
-Step 10 — Build
+9. Then run Angular migration
 
-Run:
+Now run:
 
-npm run build
+npx ng update @angular/core@21 @angular/cli@21
 
-or:
+This time don’t use --force.
 
-ng build
-
-Then:
-
-npm run lint
-
-Then your tests:
-
-npm test
-
-and your existing scripts:
-
-npm run test:lib
-npm run test:showcase
-npm run e2e
+The migration schematics will handle Angular source-code migrations.
 
 ⸻
 
-One thing I would NOT do
+One important thing about your screenshot
 
-Don’t do this:
+You are seeing:
 
-npm install @angular/core@21 @angular/cli@21 --force
+Installing a temporary Angular CLI versioned 22.1.3
 
-and then try to fix 100 dependency errors afterward.
+Don’t panic about that.
 
-Your project has quite a few dependencies:
+Your command is targeting:
 
-Angular
-PrimeNG
-PrimeUIX
-Angular ESLint
-Jest
-FontAwesome
-ng-packagr
-TypeScript
-RxJS
-ngx-translate
+@angular/core@21
+@angular/cli@21
 
-So we should let Angular’s migration schematics perform the Angular-specific migrations first.
+The CLI is using a temporary CLI to perform the update because the installed/global CLI is considered outdated. The temporary CLI version is not what you are upgrading your application to.
+
+The actual target shown in the dependency analysis is:
+
+21.2.19
 
 ⸻
 
-My recommended final dependency strategy
+Your migration should look like this
 
-I’d target approximately:
-
-Angular                 21.x
-Angular CLI             21.x
-Angular Build           21.x
-Angular DevKit          21.x
-TypeScript              5.9.x
-RxJS                    7.8.x
-Zone.js                 Angular-selected version
-Angular ESLint          21.x
-PrimeNG                 21.1.x
-PrimeIcons              8.x
-@primeuix/themes        compatible 2.x/3.x as required
-Jest                    existing compatible version
-jest-preset-angular     16.x initially
-ng-packagr              21.x
-
-Important: don’t manually edit all the Angular package versions in package.json. Let ng update make the Angular changes and migrations. Angular recommends updating to the latest patch release within the target major. 
-
-The exact order I’d use for your project
-
-CURRENT
-Angular 20.3.26
-PrimeNG 20.4.0
-Angular ESLint 19.8.1
-TypeScript 5.8.3
-Jest preset 14.6.2
-             ↓
+BEFORE
+Angular       20.3.26
+Angular CLI   20.3.32
+TypeScript    5.8.3
+PrimeNG       20.4.0
+ESLint        19.8.1
+Jest preset   14.6.2
+ng-packagr    20.3.2
+              ↓
 STEP 1
-Angular 21
-TypeScript 5.9.x
-Angular ESLint 21
-Jest preset 16
-PrimeNG 20.4.0
-             ↓ test/build
+Update peer-dependent packages
+TypeScript    5.9.x
+PrimeNG       21.x
+Angular ESLint 21.x
+Jest preset   16.x
+ng-packagr    21.x
+              ↓
 STEP 2
-PrimeNG 21.1.x
-PrimeIcons / PrimeUIX compatible versions
-             ↓ test/build
+Angular migration
+Angular       21.x
+Angular CLI   21.x
+              ↓
+STEP 3
+npm install
+              ↓
+STEP 4
+ng build
+ng test
+ng lint
+              ↓
 FINAL
-Angular 21 + PrimeNG 21
+Angular 21
+PrimeNG 21
+TypeScript 5.9
+Angular ESLint 21
 
-This is the safer approach for your particular project, especially because you’ve already encountered PrimeNG migration/regression problems in the previous Angular 19→20 upgrades.
+Most important: don’t run this
 
-If you want, ￼ I can also give you a single copy-paste Roo Code prompt that will inspect this exact project and perform the Angular 20 → 21 migration step-by-step without touching your application logic or unnecessarily changing PrimeNG.
+ng update @angular/core@21 @angular/cli@21 --force
+
+The --force option would suppress exactly the peer-dependency checks that are currently telling us that PrimeNG 20 and Angular 21 are incompatible.
+
+If you paste your complete package.json as text here (rather than screenshots), I can give you the exact modified package.json for Angular 21 + PrimeNG 21, including every dependency that needs to change, so you can replace it and run the migration cleanly.
