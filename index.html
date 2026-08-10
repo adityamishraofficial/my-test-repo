@@ -1,13 +1,561 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Tinymce</title>
-  <base href="/">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
-</head>
-<body>
-  <app-root></app-root>
-</body>
-</html>
+Yes — based on your package.json, do not try to jump directly from Angular 20 → 22.
+
+Recommended path
+
+Angular 20 → Angular 21 → Angular 22
+
+Angular’s own update guide states that ng update cannot update an application more than one major version at a time, so you should run the migrations in two stages. 
+
+Your current stack is roughly:
+
+* Angular: 20.3.26
+* Angular CLI/build: 20.3.32
+* TypeScript: 5.8.3
+* RxJS: 7.8.1
+* PrimeNG: 20.4.0
+* @angular-eslint: 19.8.1
+* ESLint: 8.57.1
+* Jest: 29.6.1
+* jest-preset-angular: 14.6.2
+* ts-jest: 29.1.1
+
+There are some important things to handle besides Angular itself.
+
+⸻
+
+1. First: create a clean Git checkpoint
+
+Before doing anything:
+
+git status
+git checkout -b upgrade/angular-20-to-22
+git add .
+git commit -m "chore: checkpoint before Angular 22 upgrade"
+
+Then make sure the current application is working:
+
+npm ci
+ng build
+npm test
+
+If you have E2E tests, run those too.
+
+⸻
+
+2. Check Node.js BEFORE upgrading
+
+Angular 22 has a significantly newer environment requirement.
+
+Angular 22 currently requires:
+
+Dependency	Angular 20	Angular 21	Angular 22
+Node.js	20.19+ / 22.12+ / 24+	20.19+ / 22.12+ / 24+	22.22.3+ / 24.15+ / 26+
+TypeScript	5.8.x	5.9.x	6.0.x
+RxJS	6.5.3+ / 7.4+	6.5.3+ / 7.4+	6.5.3+ / 7.4+
+
+So if you’re currently using Node 20, upgrade Node before Angular 22.
+
+I’d recommend:
+
+node -v
+npm -v
+
+For Angular 22, I’d use Node 24 LTS if your company environment allows it.
+
+⸻
+
+3. Angular 20 → 21
+
+Don’t manually change every Angular version in package.json.
+
+Let Angular’s migration schematics do the work.
+
+First:
+
+ng update
+
+Then:
+
+ng update @angular/core@^21 @angular/cli@^21
+
+Angular recommends using the ^major form so that you get the latest patch release within that major. 
+
+After that:
+
+npm install
+
+Then:
+
+ng version
+
+You should have something like:
+
+Angular CLI: 21.x
+Angular: 21.x
+
+Then:
+
+ng build
+
+and:
+
+npm test
+
+Do not proceed to Angular 22 until Angular 21 builds successfully.
+
+⸻
+
+4. Your TypeScript will change
+
+You currently have:
+
+"typescript": "~5.8.3"
+
+Angular 21 requires TypeScript:
+
+>=5.9.0 <6.0.0
+
+So during the Angular 20 → 21 update, Angular should move TypeScript appropriately. 
+
+Don’t manually force TypeScript 6 at this stage.
+
+⸻
+
+5. Angular 21 → 22
+
+Once Angular 21 is completely stable:
+
+ng update @angular/core@^22 @angular/cli@^22
+
+Then:
+
+npm install
+
+Check:
+
+ng version
+
+You want:
+
+Angular CLI: 22.x
+Angular: 22.x
+
+Then:
+
+ng build
+npm test
+
+⸻
+
+6. VERY IMPORTANT: Angular 22 changes change detection
+
+This is probably the biggest application-level thing I’d pay attention to in your project.
+
+Angular 22 makes OnPush the default change-detection strategy. 
+
+Angular’s current guidance explicitly says:
+
+ChangeDetectionStrategy.OnPush is the default strategy since v22.
+
+This means you should carefully test areas of your application that rely on mutation.
+
+For example, code like:
+
+this.users.push(user);
+
+can behave differently from:
+
+this.users = [...this.users, user];
+
+Likewise:
+
+this.data.name = 'ABC';
+
+instead of replacing/updating state appropriately can expose change-detection problems.
+
+Pay special attention to:
+
+* PrimeNG tables
+* p-table
+* expandable rows
+* dropdown/selects
+* dialogs
+* overlays
+* reactive forms
+* components receiving mutable objects
+* subscriptions updating component state
+* manually triggered change detection
+* setTimeout
+* ChangeDetectorRef
+* shared services
+* observable subscriptions
+
+Given the PrimeNG table/expanded-row issues you’ve already encountered, I’d test those especially thoroughly after Angular 22.
+
+⸻
+
+7. Your @angular-eslint is currently behind
+
+You have:
+
+"@angular-eslint/builder": "^19.8.1",
+"@angular-eslint/eslint-plugin": "^19.8.1",
+"@angular-eslint/eslint-plugin-template": "^19.8.1",
+"@angular-eslint/schematics": "^19.8.1",
+"@angular-eslint/template-parser": "^19.8.1"
+
+That’s a problem.
+
+angular-eslint aligns its major version with Angular/Angular CLI. 
+
+So ultimately you should move to:
+
+@angular-eslint/* 22.x
+
+The current angular-eslint 22 release specifically supports Angular 22 and TypeScript 6, and it drops ESLint 8 / legacy .eslintrc support. 
+
+So your final stack should approximately be:
+
+Angular 22
+angular-eslint 22
+ESLint 10
+TypeScript 6
+
+I would let the migration update this rather than manually mixing versions.
+
+⸻
+
+8. ESLint is another important migration
+
+You currently have:
+
+"eslint": "^8.57.1"
+
+Angular-eslint 22 drops support for:
+
+* ESLint 8
+* legacy .eslintrc configuration
+
+and moves to modern ESLint configuration. 
+
+So if your project currently has something like:
+
+.eslintrc.json
+.eslintrc.js
+
+we need to inspect that before/while moving to Angular 22.
+
+You may end up with:
+
+eslint.config.js
+
+instead.
+
+⸻
+
+9. PrimeNG — DON’T upgrade it blindly at the same time
+
+This is especially important for your project.
+
+You’re currently on:
+
+"primeng": "^20.4.0",
+"@primeuix/themes": "^3.0.0"
+
+PrimeNG releases are aligned with Angular releases, and PrimeNG 22 now exists. 
+
+I’d recommend the following sequence:
+
+Stage A
+
+Angular 20
+PrimeNG 20
+
+↓
+
+Stage B
+
+Angular 21
+PrimeNG 20
+
+Get application stable.
+
+↓
+
+Stage C
+
+Angular 21
+PrimeNG 21
+
+Get application stable.
+
+↓
+
+Stage D
+
+Angular 22
+PrimeNG 22
+
+Get application stable.
+
+This is much safer than simultaneously changing Angular 20 → 22 and PrimeNG 20 → 22.
+
+PrimeNG 21 itself is intended to be largely a drop-in update, although there are some important changes around animations. 
+
+⸻
+
+10. PrimeNG 20 → 21 → 22
+
+Your current PrimeNG:
+
+"primeng": "^20.4.0"
+
+I would eventually target:
+
+"primeng": "^22.0.0"
+
+and keep:
+
+"@primeuix/themes": "compatible 22.x"
+
+Don’t blindly copy the exact version above; let npm resolve the compatible current release when you perform the migration.
+
+One very important thing
+
+PrimeNG 20 deprecated several APIs specifically with removal planned for v22, including:
+
+* @primeng/themes
+* pTemplate
+* styleClass on host-enabled components
+* camelCase selectors
+* old pButton properties
+* AutoComplete.minLength
+* some Table properties
+* etc. 
+
+You are already on PrimeNG 20, so before PrimeNG 22 you should search your application for these deprecated APIs.
+
+⸻
+
+11. Your Jest setup needs attention
+
+You have:
+
+"jest": "^29.6.1",
+"jest-preset-angular": "^14.6.2",
+"ts-jest": "^29.1.1"
+
+Your testing dependencies are considerably older than the Angular 22 ecosystem.
+
+Current jest-preset-angular is 17.x, and current ts-jest is 29.4.x with TypeScript 6 support. 
+
+So I would plan:
+
+Angular 20
+  ↓
+Angular 21
+  ↓
+Angular 22
+  ↓
+upgrade Jest tooling
+  ↓
+run complete test suite
+
+Don’t upgrade Jest unnecessarily during the first Angular 20 → 21 migration unless dependency resolution requires it.
+
+⸻
+
+12. Your final package ecosystem should look roughly like this
+
+Not exact patch numbers, but conceptually:
+
+{
+  "dependencies": {
+    "@angular/animations": "^22.x",
+    "@angular/common": "^22.x",
+    "@angular/compiler": "^22.x",
+    "@angular/core": "^22.x",
+    "@angular/forms": "^22.x",
+    "@angular/platform-browser": "^22.x",
+    "@angular/platform-browser-dynamic": "^22.x",
+    "@angular/router": "^22.x",
+    "primeng": "^22.x",
+    "@primeuix/themes": "^3.x",
+    "rxjs": "^7.8.x",
+    "zone.js": "~0.16.x"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "^22.x",
+    "@angular/cli": "^22.x",
+    "@angular/compiler-cli": "^22.x",
+    "@angular-eslint/builder": "^22.x",
+    "@angular-eslint/eslint-plugin": "^22.x",
+    "@angular-eslint/eslint-plugin-template": "^22.x",
+    "@angular-eslint/schematics": "^22.x",
+    "@angular-eslint/template-parser": "^22.x",
+    "eslint": "^10.x",
+    "typescript": "~6.0.x"
+  }
+}
+
+Angular 22 currently has TypeScript 6.0 as its supported TypeScript range, and the current Angular 22 release is 22.0.x. 
+
+⸻
+
+13. I recommend this exact migration order for YOUR project
+
+Because you’ve already had PrimeNG migration problems, I would not do one giant migration.
+
+Phase 0 — Baseline
+
+Angular 20.3.26
+PrimeNG 20.4
+TypeScript 5.8
+
+↓
+
+Phase 1
+
+Angular 20 → 21
+
+Run:
+
+ng update @angular/core@^21 @angular/cli@^21
+
+↓
+
+npm install
+ng build
+npm test
+
+Fix everything.
+
+⸻
+
+Phase 2
+
+Upgrade ESLint ecosystem if needed:
+
+@angular-eslint 19 → 21
+ESLint compatible with angular-eslint 21
+
+Then:
+
+ng lint
+
+⸻
+
+Phase 3
+
+PrimeNG:
+
+PrimeNG 20 → 21
+
+Then thoroughly test:
+
+* Table
+* Tree
+* TreeTable
+* Dialog
+* Dropdown/Select
+* MultiSelect
+* Calendar/DatePicker
+* Overlay
+* Accordion
+* Tabs
+* Toast
+* Forms
+
+⸻
+
+Phase 4
+
+Angular:
+
+ng update @angular/core@^22 @angular/cli@^22
+
+Then:
+
+npm install
+ng build
+
+⸻
+
+Phase 5
+
+Update:
+
+TypeScript 5.9 → 6.0
+@angular-eslint 21 → 22
+ESLint → 10
+
+Run:
+
+ng lint
+npm test
+ng build --configuration production
+
+⸻
+
+Phase 6
+
+PrimeNG:
+
+PrimeNG 21 → 22
+
+Then fix all PrimeNG v22 deprecations/removals.
+
+⸻
+
+14. One more thing: don’t manually edit package.json first
+
+I strongly recommend NOT doing this:
+
+- "@angular/core": "^20.3.26"
++ "@angular/core": "^22.0.0"
+
+and then:
+
+npm install
+
+That bypasses Angular’s migration schematics.
+
+Instead use:
+
+ng update @angular/core@^21 @angular/cli@^21
+
+then later:
+
+ng update @angular/core@^22 @angular/cli@^22
+
+Angular’s update tooling performs code transformations in addition to dependency changes. 
+
+⸻
+
+My recommendation for your project
+
+Definitely:
+
+20
+ ↓
+21
+ ↓
+22
+
+And because your application uses PrimeNG heavily:
+
+Angular 20 + PrimeNG 20
+        ↓
+Angular 21 + PrimeNG 20
+        ↓
+Angular 21 + PrimeNG 21
+        ↓
+Angular 22 + PrimeNG 21
+        ↓
+Angular 22 + PrimeNG 22
+
+That gives you four controlled checkpoints instead of trying to debug Angular + PrimeNG + TypeScript + ESLint + Jest changes simultaneously.
+
+Also, Angular 22’s OnPush-by-default behavior is something I would explicitly audit in your existing application, especially because of the PrimeNG table/expanded-row functionality you’ve been working with. 
+
+If you’re using Roo Code for this migration, I can also give you a ￼ very detailed copy-paste Roo Code prompt that forces it to perform the migration 20→21→PrimeNG21→22→PrimeNG22, commit/checkpoint after every stage, and never randomly rewrite your application code.
