@@ -1,179 +1,242 @@
-Multi-Client Architecture (Mandatory Requirement)
+Yes. The screenshot shows the exact issue now: your package.json was changed, but your node_modules still contains Angular 20 packages. The error says:
 
-This application must be designed as a single local AI platform that can be accessed from both:
+Found: @angular/animations@20.3.27
+node_modules/@angular/animations
+Found: @angular-devkit/build-angular@20.3.33
+node_modules/@angular-devkit/build-angular
 
-1. A modern browser-based ChatGPT-style web application.
-2. The Roo Code VS Code extension.
+while your package.json now asks for Angular 21.
 
-Both clients must use the same local backend and the same GLM-5.2 model.
+Also, you have not updated all Angular packages yet. Your previous screenshot showed these still on Angular 20:
 
-Primary Goal
+"@angular-devkit/build-angular": "^20.3.32",
+"@angular/build": "^20.3.32",
+"@angular/cli": "^20.3.32",
+"@angular/compiler-cli": "^20.3.26",
+"@angular/language-service": "^20.3.26"
 
-Implement a single local AI server that exposes an OpenAI-compatible API.
+That is why npm cannot resolve the tree.
 
-The browser UI and Roo Code must communicate with this server simultaneously.
+Angular 21 requires TypeScript >=5.9.0 <6.0.0, so your 5.8.3 also needs to change. 
 
-There must never be duplicate business logic.
+Do this exactly
 
-The backend is the single source of truth.
+1. Update ALL Angular packages
 
-Client 1 - Browser Application
+In package.json, make the Angular versions consistent:
 
-Develop a ChatGPT/Claude-style web application with:
+"@angular/animations": "^21.2.19",
+"@angular/common": "^21.2.19",
+"@angular/compiler": "^21.2.19",
+"@angular/core": "^21.2.19",
+"@angular/forms": "^21.2.19",
+"@angular/platform-browser": "^21.2.19",
+"@angular/platform-browser-dynamic": "^21.2.19",
+"@angular/router": "^21.2.19"
 
-* Chat interface
-* Conversation history
-* Markdown rendering
-* Syntax highlighting
-* Streaming responses
-* Code blocks
-* Mermaid diagrams
-* LaTeX rendering
-* File uploads
-* Drag-and-drop
-* Project explorer
-* Monaco Editor
-* Integrated terminal
-* Diff viewer
-* Multi-tab workspace
-* Dark and light themes
-* Responsive UI
-* Session management
-* Local authentication (optional)
-* Settings page
-* Model management
-* Prompt library
-* Agent mode
-* Workspace management
+And in devDependencies:
 
-The browser should communicate exclusively with the local backend.
+"@angular-devkit/build-angular": "^21.2.19",
+"@angular-eslint/builder": "^21.0.0",
+"@angular-eslint/eslint-plugin": "^21.0.0",
+"@angular-eslint/eslint-plugin-template": "^21.0.0",
+"@angular-eslint/schematics": "^21.0.0",
+"@angular-eslint/template-parser": "^21.0.0",
+"@angular/build": "^21.2.19",
+"@angular/cli": "^21.2.19",
+"@angular/compiler-cli": "^21.2.19",
+"@angular/language-service": "^21.2.19"
 
-No external APIs may be used.
+And:
 
-⸻
+"typescript": "~5.9.0"
 
-Client 2 - Roo Code Integration
-
-The backend must be fully compatible with the Roo Code extension.
-
-The user should simply configure Roo Code to point to the local server.
-
-Example:
-
-Base URL:
-http://localhost:8000/v1
-
-API Key:
-Any placeholder value accepted by the local server (or configurable authentication).
-
-The backend must support:
-
-* Streaming
-* Chat Completions
-* Tool Calling
-* Function Calling
-* JSON Responses
-* Long Context
-* Multi-turn Conversations
-* Code Generation
-* Code Editing
-* Repository Analysis
-* Repository Refactoring
-
-No adapters or modifications to Roo Code should be required.
+Angular’s core and CLI major versions are expected to stay aligned. 
 
 ⸻
 
-Shared Backend
+2. PrimeNG must be 21
 
-The backend must be shared by both the browser application and Roo Code.
+You already tried:
 
-Responsibilities include:
+npm install primeng@21 @primeuix/themes@latest primeicons@latest
 
-* Prompt construction
-* Conversation memory
-* Context management
-* Model inference
-* Tool execution
-* File system access
-* Workspace indexing
-* Repository search
-* Agent orchestration
-* Streaming
-* Settings
-* Authentication (if enabled)
+That’s the right direction.
 
-Business logic must exist only once.
+Your package should have:
+
+"primeng": "^21.0.0",
+"@primeuix/themes": "^3.0.0",
+"primeicons": "^8.0.0"
+
+PrimeNG’s release cycle follows Angular’s major versions, with PrimeNG 21 being the Angular 21-compatible version. 
 
 ⸻
 
-OpenAI-Compatible API
+3. Update Jest preset
 
-Expose the following endpoints:
+You currently have:
 
-* GET /v1/models
-* POST /v1/chat/completions
-* POST /v1/completions
-* POST /v1/embeddings (future support)
-* POST /v1/responses (future support)
-* GET /health
-* GET /version
+"jest-preset-angular": "^14.6.2"
 
-The response format must be fully compatible with the OpenAI API so Roo Code can connect without changes.
+Change it to at least:
+
+"jest-preset-angular": "^16.0.0"
+
+I’d leave your Jest 29 packages alone for now.
 
 ⸻
 
-Local-Only Operation
+4. Update ng-packagr
 
-Everything must run locally.
+You have:
 
-No cloud services.
+"ng-packagr": "^20.3.2"
 
-No OpenAI.
+Change:
 
-No Anthropic.
-
-No Google.
-
-No Azure.
-
-No telemetry.
-
-No analytics.
-
-No external inference.
-
-No user code should ever leave the local machine.
+"ng-packagr": "^21.0.0"
 
 ⸻
 
-Extensible Model Architecture
+5. NOW the important part — delete the old installation
 
-Implement a provider abstraction so additional local models can be added easily.
+Your screenshot proves node_modules is still Angular 20.
 
-Initially implement GLM-5.2.
+From the project root, run:
 
-The architecture should also support:
+Git Bash
 
-* Qwen3-Coder
-* Qwen2.5-Coder
-* DeepSeek Coder
-* Devstral
-* Llama
-* Gemma
-* Phi
+rm -rf node_modules
+rm -f package-lock.json
 
-The active model should be selectable at runtime without code changes.
+Since you’re on Windows, you can alternatively use:
+
+rmdir /s /q node_modules
+del package-lock.json
+
+Do not skip this step.
+
+You currently have:
+
+package.json       → Angular 21
+node_modules       → Angular 20
+
+That’s exactly what the error is showing.
 
 ⸻
 
-Final Deliverable
+6. Install everything fresh
 
-The completed project should function as a self-hosted AI coding platform that combines the capabilities of:
+Now run:
 
-* ChatGPT (browser interface)
-* Claude Code (coding workflows)
-* Roo Code (VS Code integration)
-* Cursor (AI-assisted development)
+npm cache verify
+npm install
 
-All powered by a single local GLM-5.2 backend, accessible from both a browser and the Roo Code extension, with zero external dependencies after installation.
+Do not use --force.
+
+Do not use --legacy-peer-deps.
+
+If the dependency versions in package.json are correct, npm should build a new Angular 21 dependency tree.
+
+⸻
+
+7. Verify BEFORE running anything else
+
+Run:
+
+npm ls @angular/core
+npm ls @angular/cli
+npm ls @angular-devkit/build-angular
+npm ls @angular/compiler-cli
+npm ls typescript
+npm ls primeng
+
+You should see approximately:
+
+@angular/core@21.2.x
+@angular/cli@21.2.x
+@angular-devkit/build-angular@21.2.x
+@angular/compiler-cli@21.2.x
+typescript@5.9.x
+primeng@21.x
+
+If you still see:
+
+@angular/core@20.x
+
+stop there — don’t run the Angular migration yet.
+
+⸻
+
+8. Then run the Angular migration
+
+Once npm install succeeds:
+
+npx ng update @angular/core@21 @angular/cli@21
+
+If it says:
+
+Package is already up to date
+
+that’s okay. You manually moved the package versions, so the important thing now is that the Angular migration schematics have run.
+
+Then:
+
+npm run build
+
+⸻
+
+One correction to my previous advice
+
+I previously suggested doing:
+
+Angular 21 + PrimeNG 20
+        ↓
+Angular 21 + PrimeNG 21
+
+For your specific project, that’s not practical because your PrimeNG 20 package has a peer requirement of Angular <21, which is exactly what npm is reporting:
+
+primeng@20.4.0
+peer @angular/animations@"^20.0.4"
+
+So your clean target should be:
+
+             CURRENT
+                │
+                ▼
+     Angular 20.3 + PrimeNG 20
+                │
+                │ package.json changes
+                ▼
+     Angular 21.2 + PrimeNG 21
+                │
+                │ clean npm install
+                ▼
+        Angular migrations
+                │
+                ▼
+          build + tests
+
+That is the correct dependency tree.
+
+In short
+
+Your current failure is not because Angular 21 itself is incompatible. It’s because you have a mixed installation:
+
+package.json
+    ↓
+Angular 21
+node_modules
+    ↓
+Angular 20 ❌
+@angular-devkit/build-angular
+    ↓
+20.x ❌
+PrimeNG
+    ↓
+20.x ❌
+
+Make all Angular packages + Angular DevKit + PrimeNG + TypeScript consistent, delete node_modules and package-lock.json, and perform a fresh npm install.
+
+If you send me the updated full package.json after your manual changes, I can check every single dependency and tell you exactly which lines still need changing before you delete node_modules.
