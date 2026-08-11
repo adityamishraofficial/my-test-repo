@@ -1,32 +1,146 @@
-My Angular 19 app uses PrimeNG 19.1.4. The console shows:
-"AccordionTab is deprecated as of v18, please use the new structure instead."
+I'll check the current state of the npm registry first — Angular 22 landed right at the edge of what I know reliably, so let me verify the actual versions and peer requirements rather than guess.
 
-Find every <p-accordionTab> in my templates and migrate it to the new Accordion structure.
+I checked the registry — here's the current reality for your workspace. Two things will bite before any code changes:
 
-OLD:
-<p-accordion [activeIndex]="0">
-  <p-accordionTab header="Title" [disabled]="x">
-    ...content...
-  </p-accordionTab>
-</p-accordion>
+**Node 20 is dropped.** Angular 22 requires `^22.22.3 || ^24.15.0 || >=26.0.0`.
+**TypeScript must be 6.0.x.** Angular pins `>=6.0 <6.1`. npm's `latest` is now **7.0.2** — do not let TS float, or the compiler-cli will reject it.
 
-NEW:
-<p-accordion [value]="0">
-  <p-accordion-panel value="0" [disabled]="x">
-    <p-accordion-header>Title</p-accordion-header>
-    <p-accordion-content>
-      ...content...
-    </p-accordion-content>
-  </p-accordion-panel>
-</p-accordion>
+## Target versions
 
-Rules:
-1. Each p-accordionTab becomes a p-accordion-panel with a unique value ("0", "1", ... by index).
-2. Move the header attribute (or ng-template pTemplate="header" content) into <p-accordion-header>.
-3. Wrap the tab body in <p-accordion-content>.
-4. On p-accordion: [activeIndex] → [value] (number, or array when [multiple]="true"), (activeIndexChange) → (valueChange).
-5. [selected]="true" on a tab → include that panel's value in the accordion's [value].
-6. If components are standalone, import Accordion, AccordionPanel, AccordionHeader, AccordionContent from 'primeng/accordion' and drop AccordionTab. AccordionModule still works for NgModule-based components.
-7. Keep all other bindings (styleClass, iconPos, etc.) and don't touch unrelated components.
+| Package | You have | Target |
+|---|---|---|
+| `@angular/*` | 21.2.19 | **22.1.1** |
+| `@angular/cli`, `@angular/build` | 21.2.20 | **22.1.3** |
+| `ng-packagr` | 21.2.2 | **22.1.1** |
+| `typescript` | ~5.9.3 | **~6.0.3** |
+| `primeng` | 21.1.9 | **22.0.0** (needs `@angular/cdk` ^22.1.1) |
+| `@primeuix/themes` | 3.0.0 | **3.0.0 — no change** 🎉 |
+| `primeicons` | 8.0.0 | **8.0.0 — no change** |
+| `jest-preset-angular` | ^16.1.5 | **16.2.0** (min) or 17.0.0 |
+| `@angular-eslint/*` | 21.4.0 | **22.1.0** |
+| `@types/jest` | ^29.5.12 | **30.0.0** (you're on jest 30) |
+| `@fortawesome/angular-fontawesome` | ^2.0.1 | **5.1.0** ⚠️ |
+| `@ngx-translate/core` | ^17.0.0 | 18.0.0 (17 still peers OK) |
+| `zone.js` | ~0.16.0 | fine as-is |
 
-Show me the changes file by file.
+⚠️ **Your FontAwesome is already two majors behind.** `angular-fontawesome@2.x` peers `@angular/core ^20.0.0` — it never supported 21. You've been carrying that on `--force`. The path is 2 → 3 (ng20) → 4 (ng21) → 5 (ng22), so read three changelogs, not one.
+
+## Phase 0 — Preflight
+
+Your status bar shows **30 Δ / no remote**. Commit or stash first.
+
+```bash
+node -v          # must be >= 22.22.3
+git switch -c chore/DW-XXXXX-angular-22
+npm ci && npx ng build --project=ng-wings && npm test
+```
+
+Get a green baseline on 21 or you won't know what v22 broke.
+
+## Phase 1 — Clear the peer blockers first
+
+Two packages will make `ng update` refuse. Kill them *before* the update so you can run without `--force` this time.
+
+```bash
+# 1. angular2-multiselect-dropdown: last published July 2024, v10, dead.
+#    This has been flagged since your 18→19 planning. It's time.
+npm uninstall angular2-multiselect-dropdown
+
+# 2. FontAwesome, 2 -> 5
+npm i @fortawesome/angular-fontawesome@5.1.0 \
+      @fortawesome/fontawesome-svg-core@latest \
+      @fortawesome/free-solid-svg-icons@latest
+```
+
+Grep for the multiselect usages before uninstalling — swap to `p-multiselect`:
+
+```bash
+grep -rn "angular2-multiselect" projects/ --include=*.ts --include=*.html
+```
+
+## Phase 2 — Angular core
+
+```bash
+npx ng update @angular/core@22 @angular/cli@22
+```
+
+Then **immediately verify TypeScript didn't overshoot**:
+
+```bash
+npx tsc -v            # want 6.0.x
+npm pkg set devDependencies.typescript="~6.0.3"
+npm i
+```
+
+## Phase 3 — Build & test toolchain
+
+```bash
+npm i -D ng-packagr@22.1.1 @angular/build@22.1.3
+npm i -D @angular-eslint/builder@22.1.0 \
+         @angular-eslint/eslint-plugin@22.1.0 \
+         @angular-eslint/eslint-plugin-template@22.1.0 \
+         @angular-eslint/schematics@22.1.0 \
+         @angular-eslint/template-parser@22.1.0
+npm i -D jest-preset-angular@16.2.0 @types/jest@30.0.0
+```
+
+`jest-preset-angular@16.2.0` widened its peer to `<23.0.0`, so it accepts Angular 22 — that's your minimal-risk hop from 16.1.5. `17.0.0` is also available and drops the `platform-browser-dynamic` peer, but that's a bigger change; do it separately. `ts-jest@29.4.12` peers `typescript >=4.3 <7`, so it's fine.
+
+Check what your `test` target actually uses:
+
+```bash
+grep -A6 '"test"' angular.json
+```
+
+If it's `@angular-builders/jest`, you need `22.0.1`.
+
+## Phase 4 — PrimeNG 22
+
+```bash
+npm i primeng@22.0.0 @angular/cdk@22.1.1
+```
+
+Good news: `@primeuix/themes` stays at 3.0.0 and `primeicons` at 8.0.0 — no theming-package churn like the PrimeNG 20 migration. And `patch-package` is gone from your devDependencies, so no postinstall patch to regenerate this time. Confirm nothing's lingering:
+
+```bash
+ls patches/ 2>/dev/null; npm pkg get scripts.postinstall
+```
+
+## Phase 5 — Two new deprecations
+
+Both still install and work in 22, but they now emit deprecation warnings:
+
+- **`@angular/animations`** → replaced by `animate.enter` / `animate.leave`. Guide: `v22.angular.dev/guide/animations`. You depend on it at line 43 — plan a follow-up ticket, don't do it in this PR.
+- **`@angular/platform-browser-dynamic`** (line 49) → use `@angular/platform-browser`. Usually just your test bootstrap; `jest-preset-angular` 17 assumes this.
+- **`@angular-devkit/build-angular`** is now deprecated ("Angular's Webpack support is deprecated"). You already have `@angular/build`. If `angular.json` uses only `@angular/build:*` builders, drop the devkit package entirely.
+
+## Phase 6 — The library peer range (don't skip)
+
+This is the step that actually unblocks `wings-front`. In `projects/ng-wings/package.json`:
+
+```json
+"peerDependencies": {
+  "@angular/common": "^22.0.0",
+  "@angular/core": "^22.0.0",
+  "primeng": "^22.0.0"
+}
+```
+
+Consider `"^21.0.0 || ^22.0.0"` temporarily so `wings-front` can consume the new lib build before it finishes its own migration — that decouples the two repos instead of forcing a lockstep release.
+
+## Phase 7 — Verify, publish, hand off
+
+```bash
+npx ng build --project=ng-wings
+npm test && npm run test:showcase
+npm run lint
+npx ng serve --project=ng-wings-showcase   # exercise PrimeNG components by hand
+```
+
+Then major-bump `f-ng-wings-lib`, publish to the internal registry, and only then start `wings-front`.
+
+---
+
+**One honest caveat:** Angular 22 released right at the edge of what I know reliably, and **TypeScript 6.0 is itself a major release** — its own breaking changes (removed flags, new strictness) are the biggest unknown here, and likely the source of most of your compile errors. That's a class of pain your 19→20 and 20→21 hops didn't have. Skim the TS 6.0 release notes before Phase 2, and treat `angular.dev/update-guide` (21 → 22) as authoritative over my list.
+
+Want me to work through the FontAwesome 2→5 changelog jump, or draft the PrimeNG 22 selector-migration prompt like last time?
