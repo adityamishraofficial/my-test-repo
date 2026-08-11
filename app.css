@@ -1,217 +1,214 @@
-:host {
-  display: block;
-  min-height: 100vh;
-  color: #f5f5f4;
-}
+Yes. Looking at the errors in your screenshots, I recommend stopping ng update and replacing the dependency versions together. Your current package has Angular 20 + CDK 20 + PrimeNG 21 + old Jest tooling, which is why npm keeps finding another peer conflict.
 
-.workspace {
-  min-height: 100vh;
-  padding: 48px 24px 64px;
-  background:
-    radial-gradient(circle at top left, rgba(245, 158, 11, 0.22), transparent 28%),
-    radial-gradient(circle at top right, rgba(14, 165, 233, 0.18), transparent 24%),
-    linear-gradient(180deg, #18181b 0%, #0f172a 100%);
-}
+I checked the Angular 21 compatibility requirements: Angular 21 requires TypeScript >=5.9 <6, and RxJS 7.8.1 is fine.  NgRx 21 also requires Angular 21 and TypeScript 5.9.  PrimeNG’s 21.1.9 is the current v21 stable line and is intended for Angular 21. 
 
-.hero {
-  width: min(1180px, 100%);
-  margin: 0 auto 28px;
-}
+Use this package.json
 
-.eyebrow {
-  margin: 0 0 10px;
-  color: #fbbf24;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
+Based on both screenshots you provided, this is the Angular 21-compatible dependency set I recommend.
 
-.hero h1 {
-  margin: 0 0 14px;
-  max-width: 16ch;
-  color: #fafaf9;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(2.3rem, 5vw, 4.6rem);
-  font-weight: 700;
-  line-height: 0.95;
-}
+Important: I don’t see your scripts, name, and version in the screenshots, so keep those existing fields from your current package.json. Replace the dependencies and devDependencies with the following.
 
-.intro {
-  max-width: 72ch;
-  margin: 0;
-  color: #d6d3d1;
-  font-size: 1.02rem;
-  line-height: 1.7;
-}
-
-.actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 22px;
-}
-
-button {
-  border: 0;
-  border-radius: 999px;
-  padding: 0.85rem 1.2rem;
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-  transition:
-    transform 160ms ease,
-    background-color 160ms ease,
-    color 160ms ease;
-}
-
-button:hover {
-  transform: translateY(-1px);
-}
-
-.primary {
-  color: #111827;
-  background: linear-gradient(135deg, #fbbf24 0%, #fb923c 100%);
-}
-
-.secondary {
-  color: #f8fafc;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.status {
-  color: #cbd5e1;
-  font-size: 0.95rem;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
-  width: min(1180px, 100%);
-  margin: 0 auto;
-}
-
-.panel {
-  min-width: 0;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 28px;
-  background: rgba(15, 23, 42, 0.8);
-  box-shadow: 0 24px 90px rgba(15, 23, 42, 0.35);
-  backdrop-filter: blur(10px);
-  overflow: hidden;
-}
-
-.panel-header {
-  padding: 22px 24px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.panel-header h2 {
-  margin: 0 0 6px;
-  color: #fafaf9;
-  font-size: 1.05rem;
-}
-
-.panel-header p {
-  margin: 0;
-  color: #cbd5e1;
-  line-height: 1.55;
-}
-
-.panel-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 16px;
-}
-
-.editor-panel {
-  padding-bottom: 18px;
-}
-
-.editor-host {
-  visibility: hidden;
-}
-
-.preview-panel,
-.export-panel {
-  display: flex;
-  flex-direction: column;
-}
-
-.patch-panel {
-  grid-column: 1 / -1;
-}
-
-.preview-frame {
-  width: 100%;
-  min-height: 420px;
-  border: 0;
-  background: #ffffff;
-}
-
-.patch-input {
-  width: 100%;
-  min-height: 320px;
-  padding: 20px 24px 24px;
-  border: 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  outline: none;
-  resize: vertical;
-  color: #f8fafc;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 0.96));
-  font: inherit;
-  font-size: 0.88rem;
-  line-height: 1.6;
-  box-sizing: border-box;
-}
-
-.patch-input::placeholder {
-  color: rgba(226, 232, 240, 0.55);
-}
-
-.code-view {
-  margin: 0;
-  padding: 20px 24px 24px;
-  color: #dbeafe;
-  background: linear-gradient(180deg, rgba(30, 41, 59, 0.35), rgba(15, 23, 42, 0.85));
-  font-size: 0.88rem;
-  line-height: 1.6;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-  flex: 1;
-}
-
-code {
-  padding: 0.1rem 0.35rem;
-  border-radius: 0.4rem;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-@media (max-width: 960px) {
-  .grid {
-    grid-template-columns: 1fr;
+{
+  "private": true,
+  "dependencies": {
+    "@angular/animations": "^21.2.19",
+    "@angular/cdk": "^21.2.19",
+    "@angular/common": "^21.2.19",
+    "@angular/compiler": "^21.2.19",
+    "@angular/core": "^21.2.19",
+    "@angular/forms": "^21.2.19",
+    "@angular/platform-browser": "^21.2.19",
+    "@angular/platform-browser-dynamic": "^21.2.19",
+    "@angular/router": "^21.2.19",
+    "@fortawesome/angular-fontawesome": "^2.0.0",
+    "@fortawesome/fontawesome-free": "^6.5.2",
+    "@fortawesome/fontawesome-svg-core": "^6.5.2",
+    "@fortawesome/free-solid-svg-icons": "^6.5.2",
+    "@ngrx/component-store": "^21.0.0",
+    "@ngrx/effects": "^21.0.0",
+    "@ngrx/router-store": "^21.0.0",
+    "@ngrx/store": "^21.0.0",
+    "@ngrx/store-devtools": "^21.0.0",
+    "@ngx-translate/core": "^16.0.0",
+    "@ngx-translate/http-loader": "^17.0.0",
+    "@primeuix/themes": "^2.0.0",
+    "angular2-multiselect-dropdown": "^9.0.0",
+    "autonumeric": "^4.5.10",
+    "bootstrap": "^4.6.2",
+    "core-js": "^3.37.1",
+    "cors": "^2.8.5",
+    "fast-json-patch": "^3.1.1",
+    "file-saver": "^2.0.5",
+    "font-awesome": "^4.7.0",
+    "hash.js": "^1.1.7",
+    "jest-marbles": "^3.1.1",
+    "lodash": "^4.17.23",
+    "primeflex": "^3.3.1",
+    "primeicons": "^7.0.0",
+    "primeng": "21.1.9",
+    "rxjs": "~7.8.1",
+    "terser": "^5.31.0",
+    "tslib": "^2.6.2",
+    "wings-i18n": "^11.0.0",
+    "zone.js": "~0.16.0"
+  },
+  "devDependencies": {
+    "@angular-builders/jest": "^21.0.0",
+    "@angular-eslint/builder": "^21.2.0",
+    "@angular-eslint/eslint-plugin": "^21.2.0",
+    "@angular-eslint/eslint-plugin-template": "^21.2.0",
+    "@angular-eslint/schematics": "^21.2.0",
+    "@angular-eslint/template-parser": "^21.2.0",
+    "@angular/build": "^21.2.19",
+    "@angular/cli": "^21.2.19",
+    "@angular/compiler-cli": "^21.2.19",
+    "@angular/language-service": "^21.2.19",
+    "@ngrx/schematics": "^21.0.0",
+    "@openapitools/openapi-generator-cli": "^1.0.18-4.3.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.15.0",
+    "@typescript-eslint/eslint-plugin": "^8.63.0",
+    "@typescript-eslint/parser": "^8.63.0",
+    "c-api-specs": "23.0.14",
+    "concurrently": "^7.6.0",
+    "copyfiles": "^2.4.1",
+    "eslint": "^9.28.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.29.1",
+    "jest": "^30.0.5",
+    "jest-environment-jsdom": "^30.0.5",
+    "jest-preset-angular": "^16.1.3",
+    "patch-package": "^8.0.0",
+    "source-map-explorer": "^2.5.3",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.9.3"
   }
 }
 
-@media (max-width: 640px) {
-  .workspace {
-    padding-inline: 16px;
-    padding-top: 32px;
-  }
+One correction regarding @primeuix/themes
 
-  .hero h1 {
-    max-width: 12ch;
-  }
+Your current project has:
 
-  .actions {
-    align-items: stretch;
-  }
+"@primeuix/themes": "^1.2.5"
 
-  button {
-    width: 100%;
-  }
-}
+For the PrimeNG 21 migration, I would use the PrimeUIX themes version compatible with your PrimeNG 21 setup, but don’t blindly use the current latest because the registry now has newer major versions. PrimeNG’s current v21 stable is 21.1.9; PrimeNG 22 has already been released, so using unpinned latest would accidentally move you toward Angular 22. 
+
+If your existing PrimeNG 20 theme configuration is working, you can initially keep:
+
+"@primeuix/themes": "^1.2.5"
+
+and only upgrade it if PrimeNG 21 reports a peer requirement.
+
+⸻
+
+Very important: Jest
+
+I also changed this:
+
+"jest-preset-angular": "^14.6.2"
+
+to:
+
+"jest-preset-angular": "^16.1.3"
+
+This is important for Angular 21. jest-preset-angular 16.0.0 added Angular 21 support, and 16.1.x contains further Angular 21 fixes. 
+
+I also moved:
+
+Jest 29 → Jest 30
+
+because the newer Angular/Jest tooling is aligned around Jest 30.
+
+⸻
+
+Now do NOT run ng update
+
+Since you’re manually aligning the complete dependency graph, do this instead.
+
+1. Save your current package
+
+git checkout -b angular-21-upgrade
+
+Then replace your dependency sections with the above.
+
+2. Delete the old installation
+
+On Git Bash:
+
+rm -rf node_modules
+rm -f package-lock.json
+
+On Windows PowerShell:
+
+Remove-Item -Recurse -Force node_modules
+Remove-Item -Force package-lock.json
+
+3. Clear npm cache
+
+npm cache verify
+
+4. Install
+
+npm install
+
+Do not use --force.
+
+Do not use --legacy-peer-deps.
+
+If this succeeds, your dependency tree is clean.
+
+⸻
+
+Then verify
+
+ng version
+
+You should see:
+
+Angular CLI: 21.2.x
+Angular:
+  @angular/animations     21.2.x
+  @angular/common         21.2.x
+  @angular/compiler       21.2.x
+  @angular/core           21.2.x
+  @angular/forms          21.2.x
+  @angular/platform-browser 21.2.x
+  @angular/router         21.2.x
+@angular/cdk               21.2.x
+primeng                    21.1.9
+typescript                 5.9.x
+rxjs                       7.8.x
+
+Angular 21 officially supports TypeScript 5.9.x and RxJS 7.x. 
+
+⸻
+
+Then build
+
+ng build
+
+If that succeeds:
+
+ng serve
+
+Then tests:
+
+npm test
+
+⸻
+
+⚠️ One thing I expect next
+
+Your package installation should be the first hurdle. After that, because you’re moving:
+
+Angular 20 → 21
+PrimeNG 20 → 21
+Jest 29 → 30
+NgRx 20 → 21
+Angular ESLint 20 → 21
+
+you may get source-code migration errors, particularly in PrimeNG. That’s different from the dependency errors you’ve been getting.
+
+PrimeNG v21 is explicitly the Angular v21-compatible line. 
+
+Run only npm install with this package.json first. If it fails, send me the full npm error screenshot. Don’t add --force — we’ll fix the exact remaining package conflict.
