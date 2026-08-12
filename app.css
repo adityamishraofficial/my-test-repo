@@ -1,8 +1,22 @@
-Yes. Based on the errors in your screenshot, the issue is that Angular 22 cannot resolve the Angular-21-only peer dependencies. So for the pre-migration package.json, we should update the Angular-coupled third-party packages to their Angular 22-compatible majors, while keeping every @angular/* package at 21.x as you requested.
+The screenshot confirms the problem. My previous package.json was not the right approach for your requirement. I had upgraded PrimeNG/NgRx before Angular, which creates exactly this conflict.
 
-I also verified that PrimeNG 22.0.0 is now available, @angular-builders/jest 22.0.1 requires Angular CLI 22, and Angular ESLint 22 aligns with Angular 22. 
+Your current error is:
 
-Updated package.json
+@angular/router = 21.2.19
+        ↑
+@ngrx/router-store@22.1.1 requires @angular/router ^22.0.0
+
+and:
+
+primeng@22.0.0
+        ↑
+requires Angular 22
+
+Do this instead
+
+Since you want ng update to perform Angular 21 → 22, revert the Angular-coupled packages to their 21 versions first.
+
+Use these versions:
 
 {
   "private": true,
@@ -20,11 +34,11 @@ Updated package.json
     "@fortawesome/fontawesome-free": "^6.5.2",
     "@fortawesome/fontawesome-svg-core": "^6.5.2",
     "@fortawesome/free-solid-svg-icons": "^6.5.2",
-    "@ngrx/component-store": "^22.0.0",
-    "@ngrx/effects": "^22.0.0",
-    "@ngrx/router-store": "^22.0.0",
-    "@ngrx/store": "^22.0.0",
-    "@ngrx/store-devtools": "^22.0.0",
+    "@ngrx/component-store": "^21.0.0",
+    "@ngrx/effects": "^21.0.0",
+    "@ngrx/router-store": "^21.0.0",
+    "@ngrx/store": "^21.0.0",
+    "@ngrx/store-devtools": "^21.0.0",
     "@ngx-translate/core": "^16.0.0",
     "@ngx-translate/http-loader": "^17.0.0",
     "@primeuix/themes": "^2.0.0",
@@ -41,7 +55,7 @@ Updated package.json
     "lodash": "^4.17.23",
     "primeflex": "^3.3.1",
     "primeicons": "^7.0.0",
-    "primeng": "^22.0.0",
+    "primeng": "^21.1.9",
     "rxjs": "^7.8.1",
     "terser": "^5.31.0",
     "tslib": "^2.6.2",
@@ -49,17 +63,17 @@ Updated package.json
     "zone.js": "~0.16.0"
   },
   "devDependencies": {
-    "@angular-builders/jest": "^22.0.1",
-    "@angular-eslint/builder": "^22.1.0",
-    "@angular-eslint/eslint-plugin": "^22.1.0",
-    "@angular-eslint/eslint-plugin-template": "^22.1.0",
-    "@angular-eslint/schematics": "^22.1.0",
-    "@angular-eslint/template-parser": "^22.1.0",
+    "@angular-builders/jest": "^21.0.0",
+    "@angular-eslint/builder": "^21.2.0",
+    "@angular-eslint/eslint-plugin": "^21.2.0",
+    "@angular-eslint/eslint-plugin-template": "^21.2.0",
+    "@angular-eslint/schematics": "^21.2.0",
+    "@angular-eslint/template-parser": "^21.2.0",
     "@angular/build": "^21.2.20",
     "@angular/cli": "^21.2.20",
     "@angular/compiler-cli": "^21.2.19",
     "@angular/language-service": "^21.2.19",
-    "@ngrx/schematics": "^22.0.0",
+    "@ngrx/schematics": "^21.0.0",
     "@openapitools/openapi-generator-cli": "^2.18.4",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.15.0",
@@ -82,50 +96,69 @@ Updated package.json
   }
 }
 
-What I changed
+Then run these commands
 
-Package	Current	Updated
-@angular/*	21.x	21.x — unchanged
-@ngrx/*	21.x	22.x
-@ngrx/schematics	21.x	22.x
-@angular-builders/jest	21.x	22.0.1
-@angular-eslint/*	21.x	22.1.0
-primeng	21.1.9	22.0.0
-TypeScript	5.9.3	5.9.3 — unchanged
-
-PrimeNG 22.0.0 is the Angular-22 generation, so keeping PrimeNG 21.1.9 would continue to create exactly the peer-dependency error you’re seeing. 
-
-Now run this
-
-After replacing your package.json:
+Because you already installed the 22 versions, clean them out:
 
 rm -rf node_modules package-lock.json
-npm install
-
-On Windows PowerShell:
-
-Remove-Item -Recurse -Force node_modules
-Remove-Item -Force package-lock.json
-npm install
 
 Then:
 
-ng update @angular/core@22 @angular/cli@22
+npm install
 
-And CDK:
+Now don’t change package.json manually.
 
-ng update @angular/cdk@22
+Run:
 
-One important thing
+ng update @angular/core@22 @angular/cli@22 --force
 
-Do not manually change these:
+Why --force is necessary here
 
-"@angular/core": "^21.2.19",
-"@angular/cli": "^21.2.20",
-"@angular/compiler-cli": "^21.2.19"
+This is the important distinction:
 
-That is intentional. ng update will change them to Angular 22.
+PrimeNG 21 ──────── requires Angular 21
+NgRx 21 ─────────── requires Angular 21
+                    ↓
+             Angular 21 → 22
 
-Also, Angular 22 requires TypeScript >=6.0.0 <6.1.0, whereas your Angular 21 project uses TypeScript 5.9.3. Let the Angular migration update TypeScript; don’t change it manually before ng update. 
+During the Angular migration, the existing PrimeNG/NgRx packages naturally report that they don’t support Angular 22 yet.
 
-One caveat: the current NgRx registry is showing 22.0.0-beta.0 rather than a final 22 release, so if npm install rejects @ngrx/*@22.0.0, don’t use --force. In that case, I would keep NgRx 21 temporarily and migrate it after Angular 22 is installed. 
+--force tells Angular:
+
+Proceed with the Angular 21 → 22 migration despite these temporary peer-dependency conflicts.
+
+It does not mean you’re forcing npm to install incompatible versions permanently.
+
+After Angular becomes 22:
+
+Angular 22
+   ↓
+PrimeNG 22
+NgRx 22
+Angular ESLint 22
+Angular Builders Jest 22
+
+Then upgrade those packages.
+
+After Angular update
+
+Run:
+
+ng version
+
+You should see:
+
+Angular CLI: 22.x
+Angular: 22.x
+
+Then we’ll upgrade the remaining Angular-22-dependent packages:
+
+npm install \
+  @ngrx/component-store@22 \
+  @ngrx/effects@22 \
+  @ngrx/router-store@22 \
+  @ngrx/store@22 \
+  @ngrx/store-devtools@22 \
+  primeng@22
+
+So don’t use the previous package.json I gave you. Use the one above. Your current screenshot shows that primeng@22 and @ngrx/router-store@22 were installed while @angular/router was still 21, which is the direct cause of the failure.
