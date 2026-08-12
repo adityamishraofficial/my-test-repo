@@ -1,164 +1,39 @@
-The screenshot confirms the problem. My previous package.json was not the right approach for your requirement. I had upgraded PrimeNG/NgRx before Angular, which creates exactly this conflict.
+Your patch content is still correct for PrimeNG 21 — the line numbers are what's broken.
 
-Your current error is:
+**Root cause:** your hunk header says `@@ -2804,10 ...`, but in `primeng@21.1.9` the `clearFilterValues()` body sits at line **2342** (`clearFilterValues() {` is 2341). That's ~460 lines of drift. patch-package only searches ±20 lines around the recorded start before giving up:
 
-@angular/router = 21.2.19
-        ↑
-@ngrx/router-store@22.1.1 requires @angular/router ^22.0.0
+```js
+if (Math.abs(fuzzingOffset) > 20) { throw new Error(`Cannot apply hunk 0 ...`) }
+```
 
-and:
+So it hard-fails even though the context matches perfectly further up the file. I pulled `primeng@21.1.9` and confirmed the target code is byte-identical to your context lines (LF endings, same indentation) — only the offset moved.
 
-primeng@22.0.0
-        ↑
-requires Angular 22
+**Corrected `patches/primeng+21.1.9.patch`** (verified: applies clean with `patch-package 8.0.0` against 21.1.9):
 
-Do this instead
+```diff
+diff --git a/node_modules/primeng/fesm2022/primeng-table.mjs b/node_modules/primeng/fesm2022/primeng-table.mjs
+index 77422c5..bd9d809 100644
+--- a/node_modules/primeng/fesm2022/primeng-table.mjs
++++ b/node_modules/primeng/fesm2022/primeng-table.mjs
+@@ -2342,10 +2342,12 @@ class Table extends BaseComponent {
+         for (const [, filterMetadata] of Object.entries(this.filters)) {
+             if (Array.isArray(filterMetadata)) {
+                 for (let filter of filterMetadata) {
+-                    filter.value = null;
++                    if (filter && typeof filter === 'object') {
++                        filter.value = null;
++                    }
+                 }
+             }
+-            else if (filterMetadata) {
++            else if (filterMetadata && typeof filterMetadata === 'object') {
+                 filterMetadata.value = null;
+             }
+         }
+```
 
-Since you want ng update to perform Angular 21 → 22, revert the Angular-coupled packages to their 21 versions first.
+Keep the trailing newline, save as LF (your Git Bash/CRLF bite from the 18→19 round applies here too — `git config core.autocrlf false` for this repo if it isn't already).
 
-Use these versions:
-
-{
-  "private": true,
-  "dependencies": {
-    "@angular/animations": "^21.2.19",
-    "@angular/cdk": "^21.2.0",
-    "@angular/common": "^21.2.19",
-    "@angular/compiler": "^21.2.19",
-    "@angular/core": "^21.2.19",
-    "@angular/forms": "^21.2.19",
-    "@angular/platform-browser": "^21.2.19",
-    "@angular/platform-browser-dynamic": "^21.2.19",
-    "@angular/router": "^21.2.19",
-    "@fortawesome/angular-fontawesome": "^4.0.0",
-    "@fortawesome/fontawesome-free": "^6.5.2",
-    "@fortawesome/fontawesome-svg-core": "^6.5.2",
-    "@fortawesome/free-solid-svg-icons": "^6.5.2",
-    "@ngrx/component-store": "^21.0.0",
-    "@ngrx/effects": "^21.0.0",
-    "@ngrx/router-store": "^21.0.0",
-    "@ngrx/store": "^21.0.0",
-    "@ngrx/store-devtools": "^21.0.0",
-    "@ngx-translate/core": "^16.0.0",
-    "@ngx-translate/http-loader": "^17.0.0",
-    "@primeuix/themes": "^2.0.0",
-    "angular2-multiselect-dropdown": "^9.0.0",
-    "autonumeric": "^4.5.10",
-    "bootstrap": "^4.6.2",
-    "core-js": "^3.37.1",
-    "cors": "^2.8.5",
-    "fast-json-patch": "^3.1.1",
-    "file-saver": "^2.0.5",
-    "font-awesome": "^4.7.0",
-    "hash.js": "^1.1.7",
-    "jest-marbles": "^3.1.1",
-    "lodash": "^4.17.23",
-    "primeflex": "^3.3.1",
-    "primeicons": "^7.0.0",
-    "primeng": "^21.1.9",
-    "rxjs": "^7.8.1",
-    "terser": "^5.31.0",
-    "tslib": "^2.6.2",
-    "wings-i18n": "^11.0.0",
-    "zone.js": "~0.16.0"
-  },
-  "devDependencies": {
-    "@angular-builders/jest": "^21.0.0",
-    "@angular-eslint/builder": "^21.2.0",
-    "@angular-eslint/eslint-plugin": "^21.2.0",
-    "@angular-eslint/eslint-plugin-template": "^21.2.0",
-    "@angular-eslint/schematics": "^21.2.0",
-    "@angular-eslint/template-parser": "^21.2.0",
-    "@angular/build": "^21.2.20",
-    "@angular/cli": "^21.2.20",
-    "@angular/compiler-cli": "^21.2.19",
-    "@angular/language-service": "^21.2.19",
-    "@ngrx/schematics": "^21.0.0",
-    "@openapitools/openapi-generator-cli": "^2.18.4",
-    "@types/jest": "^30.0.0",
-    "@types/node": "^22.15.0",
-    "@typescript-eslint/eslint-plugin": "^8.63.0",
-    "@typescript-eslint/parser": "^8.63.0",
-    "c-api-specs": "23.0.14",
-    "concurrently": "^7.6.0",
-    "copyfiles": "^2.4.1",
-    "eslint": "^9.28.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-import": "^2.29.1",
-    "jest": "^30.0.5",
-    "jest-environment-jsdom": "^30.0.5",
-    "jest-preset-angular": "^16.1.5",
-    "patch-package": "^8.0.0",
-    "rollup": "^4.62.4",
-    "source-map-explorer": "^2.5.3",
-    "ts-node": "^10.9.2",
-    "typescript": "~5.9.3"
-  }
-}
-
-Then run these commands
-
-Because you already installed the 22 versions, clean them out:
-
-rm -rf node_modules package-lock.json
-
-Then:
-
-npm install
-
-Now don’t change package.json manually.
-
-Run:
-
-ng update @angular/core@22 @angular/cli@22 --force
-
-Why --force is necessary here
-
-This is the important distinction:
-
-PrimeNG 21 ──────── requires Angular 21
-NgRx 21 ─────────── requires Angular 21
-                    ↓
-             Angular 21 → 22
-
-During the Angular migration, the existing PrimeNG/NgRx packages naturally report that they don’t support Angular 22 yet.
-
---force tells Angular:
-
-Proceed with the Angular 21 → 22 migration despite these temporary peer-dependency conflicts.
-
-It does not mean you’re forcing npm to install incompatible versions permanently.
-
-After Angular becomes 22:
-
-Angular 22
-   ↓
-PrimeNG 22
-NgRx 22
-Angular ESLint 22
-Angular Builders Jest 22
-
-Then upgrade those packages.
-
-After Angular update
-
-Run:
-
-ng version
-
-You should see:
-
-Angular CLI: 22.x
-Angular: 22.x
-
-Then we’ll upgrade the remaining Angular-22-dependent packages:
-
-npm install \
-  @ngrx/component-store@22 \
-  @ngrx/effects@22 \
-  @ngrx/router-store@22 \
-  @ngrx/store@22 \
-  @ngrx/store-devtools@22 \
-  primeng@22
-
-So don’t use the previous package.json I gave you. Use the one above. Your current screenshot shows that primeng@22 and @ngrx/router-store@22 were installed while @angular/router was still 21, which is the direct cause of the failure.
+Two notes:
+- Don't hand-edit the header next time. Edit `node_modules/primeng/fesm2022/primeng-table.mjs` directly, then `npx patch-package primeng` — it recomputes offsets for you. Hand-editing offsets is exactly what produced this.
+- If the crash you're actually guarding against is `Object.entries(this.filters)` throwing on a null `filters`, this patch won't help — the guard only covers non-object filter entries. Worth confirming the stack trace before shipping.
