@@ -1,18 +1,14 @@
-Yes. Looking at the errors in your screenshots, I recommend stopping ng update and replacing the dependency versions together. Your current package has Angular 20 + CDK 20 + PrimeNG 21 + old Jest tooling, which is why npm keeps finding another peer conflict.
+Yes. Since you want to move Angular 21 → 22 using ng update, you should not manually change any @angular/* versions in package.json.
 
-I checked the Angular 21 compatibility requirements: Angular 21 requires TypeScript >=5.9 <6, and RxJS 7.8.1 is fine.  NgRx 21 also requires Angular 21 and TypeScript 5.9.  PrimeNG’s 21.1.9 is the current v21 stable line and is intended for Angular 21. 
+I checked both screenshots and prepared the package sections based on your current file.
 
-Use this package.json
-
-Based on both screenshots you provided, this is the Angular 21-compatible dependency set I recommend.
-
-Important: I don’t see your scripts, name, and version in the screenshots, so keep those existing fields from your current package.json. Replace the dependencies and devDependencies with the following.
+package.json — keep Angular at 21 for ng update
 
 {
   "private": true,
   "dependencies": {
     "@angular/animations": "^21.2.19",
-    "@angular/cdk": "^21.2.19",
+    "@angular/cdk": "^21.2.0",
     "@angular/common": "^21.2.19",
     "@angular/compiler": "^21.2.19",
     "@angular/core": "^21.2.19",
@@ -20,7 +16,7 @@ Important: I don’t see your scripts, name, and version in the screenshots, so 
     "@angular/platform-browser": "^21.2.19",
     "@angular/platform-browser-dynamic": "^21.2.19",
     "@angular/router": "^21.2.19",
-    "@fortawesome/angular-fontawesome": "^2.0.0",
+    "@fortawesome/angular-fontawesome": "^4.0.0",
     "@fortawesome/fontawesome-free": "^6.5.2",
     "@fortawesome/fontawesome-svg-core": "^6.5.2",
     "@fortawesome/free-solid-svg-icons": "^6.5.2",
@@ -45,8 +41,8 @@ Important: I don’t see your scripts, name, and version in the screenshots, so 
     "lodash": "^4.17.23",
     "primeflex": "^3.3.1",
     "primeicons": "^7.0.0",
-    "primeng": "21.1.9",
-    "rxjs": "~7.8.1",
+    "primeng": "^21.1.9",
+    "rxjs": "^7.8.1",
     "terser": "^5.31.0",
     "tslib": "^2.6.2",
     "wings-i18n": "^11.0.0",
@@ -59,16 +55,16 @@ Important: I don’t see your scripts, name, and version in the screenshots, so 
     "@angular-eslint/eslint-plugin-template": "^21.2.0",
     "@angular-eslint/schematics": "^21.2.0",
     "@angular-eslint/template-parser": "^21.2.0",
-    "@angular/build": "^21.2.19",
-    "@angular/cli": "^21.2.19",
+    "@angular/build": "^21.2.20",
+    "@angular/cli": "^21.2.20",
     "@angular/compiler-cli": "^21.2.19",
     "@angular/language-service": "^21.2.19",
     "@ngrx/schematics": "^21.0.0",
-    "@openapitools/openapi-generator-cli": "^1.0.18-4.3.1",
+    "@openapitools/openapi-generator-cli": "^2.18.4",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.15.0",
-    "@typescript-eslint/eslint-plugin": "^8.63.0",
-    "@typescript-eslint/parser": "^8.63.0",
+    "@typescript-eslint/eslint-plugin": "^8.65.8",
+    "@typescript-eslint/parser": "^8.65.6",
     "c-api-specs": "23.0.14",
     "concurrently": "^7.6.0",
     "copyfiles": "^2.4.1",
@@ -77,138 +73,75 @@ Important: I don’t see your scripts, name, and version in the screenshots, so 
     "eslint-plugin-import": "^2.29.1",
     "jest": "^30.0.5",
     "jest-environment-jsdom": "^30.0.5",
-    "jest-preset-angular": "^16.1.3",
+    "jest-preset-angular": "^16.1.5",
     "patch-package": "^8.0.0",
+    "rollup": "^4.62.4",
     "source-map-explorer": "^2.5.3",
     "ts-node": "^10.9.2",
     "typescript": "~5.9.3"
   }
 }
 
-One correction regarding @primeuix/themes
+Important: I have deliberately kept all your @angular/* packages on 21.x. Do not change them manually to 22.x.
 
-Your current project has:
+Then run this
 
-"@primeuix/themes": "^1.2.5"
-
-For the PrimeNG 21 migration, I would use the PrimeUIX themes version compatible with your PrimeNG 21 setup, but don’t blindly use the current latest because the registry now has newer major versions. PrimeNG’s current v21 stable is 21.1.9; PrimeNG 22 has already been released, so using unpinned latest would accidentally move you toward Angular 22. 
-
-If your existing PrimeNG 20 theme configuration is working, you can initially keep:
-
-"@primeuix/themes": "^1.2.5"
-
-and only upgrade it if PrimeNG 21 reports a peer requirement.
-
-⸻
-
-Very important: Jest
-
-I also changed this:
-
-"jest-preset-angular": "^14.6.2"
-
-to:
-
-"jest-preset-angular": "^16.1.3"
-
-This is important for Angular 21. jest-preset-angular 16.0.0 added Angular 21 support, and 16.1.x contains further Angular 21 fixes. 
-
-I also moved:
-
-Jest 29 → Jest 30
-
-because the newer Angular/Jest tooling is aligned around Jest 30.
-
-⸻
-
-Now do NOT run ng update
-
-Since you’re manually aligning the complete dependency graph, do this instead.
-
-1. Save your current package
-
-git checkout -b angular-21-upgrade
-
-Then replace your dependency sections with the above.
-
-2. Delete the old installation
-
-On Git Bash:
-
-rm -rf node_modules
-rm -f package-lock.json
-
-On Windows PowerShell:
-
-Remove-Item -Recurse -Force node_modules
-Remove-Item -Force package-lock.json
-
-3. Clear npm cache
-
-npm cache verify
-
-4. Install
+First make sure your current Angular 21 installation is clean:
 
 npm install
 
-Do not use --force.
+Then:
 
-Do not use --legacy-peer-deps.
+ng update @angular/core@22 @angular/cli@22
 
-If this succeeds, your dependency tree is clean.
+If you also want Angular CDK 22:
 
-⸻
+ng update @angular/cdk@22
 
-Then verify
+Angular officially supports updating one major version at a time, so 21 → 22 is the correct path. 
+
+One important point about TypeScript
+
+Your current package has:
+
+"typescript": "~5.9.3"
+
+Angular 21 supports TypeScript >=5.9.0 <6.0.0, while Angular 22 requires TypeScript >=6.0.0 <6.1.0. 
+
+So don’t manually change it before ng update if your intention is to let Angular’s migration handle it. After the Angular update, verify:
 
 ng version
 
-You should see:
+and:
 
-Angular CLI: 21.2.x
-Angular:
-  @angular/animations     21.2.x
-  @angular/common         21.2.x
-  @angular/compiler       21.2.x
-  @angular/core           21.2.x
-  @angular/forms          21.2.x
-  @angular/platform-browser 21.2.x
-  @angular/router         21.2.x
-@angular/cdk               21.2.x
-primeng                    21.1.9
-typescript                 5.9.x
-rxjs                       7.8.x
+npm ls typescript
 
-Angular 21 officially supports TypeScript 5.9.x and RxJS 7.x. 
+If ng update doesn’t move TypeScript to 6.x, then update it separately:
 
-⸻
+npm install -D typescript@~6.0.0
 
-Then build
+PrimeNG
 
-ng build
+You currently have:
 
-If that succeeds:
+"primeng": "^21.1.9"
 
-ng serve
+PrimeNG’s release cycle is aligned with Angular, and PrimeNG 22 now exists for Angular 22. 
 
-Then tests:
+But since you specifically asked not to increase package versions manually, I would leave PrimeNG 21.1.9 for now. First complete:
 
-npm test
+Angular 21
+   ↓
+ng update
+   ↓
+Angular 22
+   ↓
+fix Angular migration/build errors
+   ↓
+PrimeNG 21 → 22 separately
 
-⸻
+That is safer, especially considering the PrimeNG migration problems you’ve encountered previously.
 
-⚠️ One thing I expect next
+Angular 21 → 22 Update Guide⁠￼
 
-Your package installation should be the first hurdle. After that, because you’re moving:
-
-Angular 20 → 21
-PrimeNG 20 → 21
-Jest 29 → 30
-NgRx 20 → 21
-Angular ESLint 20 → 21
-
-you may get source-code migration errors, particularly in PrimeNG. That’s different from the dependency errors you’ve been getting.
-
-PrimeNG v21 is explicitly the Angular v21-compatible line. 
-
-Run only npm install with this package.json first. If it fails, send me the full npm error screenshot. Don’t add --force — we’ll fix the exact remaining package conflict.
+So the key point: use the package.json above as your pre-update package.json, then let ng update @angular/core@22 @angular/cli@22 perform the Angular version changes.
