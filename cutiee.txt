@@ -1,45 +1,350 @@
-You can give Qwen the following prompt:
+# Angular 19 → 20 Upgrade Runbook (`wings-front`, NgModule-based)
 
-⸻
+All versions below were verified against the live npm registry on **2026-08-13**.
 
-Task: Identify and Fix documentStage = preview Rendering Issue
+---
 
-There is a rendering issue in the Preview stage (documentStage === 'preview') that needs to be fixed without affecting any existing functionality.
+## 0. Verified target versions
 
-Current Expected Behavior
+### Must change
 
-Clause Status	Expected Output
-FULLY_SATISFIED	Display only the clause content. Do not display the clause title/name.
-PARTIALLY_SATISFIED	Display clause title + clause content.
-PARTIALLY_DISSATISFIED	Display nothing.
-FULLY_DISSATISFIED	Display nothing.
+| Package | Current | Target | Why |
+|---|---|---|---|
+| `@angular/*` (all) | `^19.2.25` | `^20.3.27` | Core upgrade |
+| `@angular/cli`, `@angular/build` | `^19.2.27` | `^20.3.34` | CLI/builder |
+| `@angular/cdk` | `^19.2.19` | `^20.2.14` | PrimeNG 20 peer needs `^20.0.3` |
+| `@angular-builders/jest` | `^19.0.1` | `^20.0.0` | Hard-pins `@angular/core` |
+| `@angular-eslint/*` | `^19.8.1` | `^20.7.0` | Still supports eslint 8.57 |
+| `@ngrx/*` | `^19.2.1` | `^20.1.0` | Peers `@angular/core ^20.0.0` |
+| `primeng` | `^19.1.4` | `^20.4.0` | Major — selector renames |
+| `@primeng/themes` | `^19.1.4` | `^20.4.0` | See §5 for the shim-vs-rename choice |
+| `@fortawesome/angular-fontawesome` | `^1.0.0` | `^3.0.0` | v1 peers `^19.0.0` only |
+| `@types/node` | `^18.19.45` | `^20.19.43` | Node 18 dropped |
 
-Current Issue
+### Deliberately NOT changing (verified safe)
 
-For documentStage === 'preview', all cases are working correctly except FULLY_SATISFIED.
+| Package | Current | Verified reason |
+|---|---|---|
+| `typescript` | `~5.8.3` | Angular 20 peer is `>=5.8 <6.0` — already valid |
+| `jest`, `jest-environment-jsdom`, `@types/jest` | `^29.7.0` / `^29.5.14` | `@angular-builders/jest@20` peers `jest >=29` |
+| `jest-preset-angular` | `^14.6.2` | Peers `@angular/core >=15.0.0 <21.0.0` — covers v20 |
+| `eslint` | `^8.57.0` | `@angular-eslint@20` peers `^8.57.0 \|\| ^9.0.0` |
+| `@typescript-eslint/*` | `^8.63.0` | Within `^7.11.0 \|\| ^8.0.0` |
+| `@ngx-translate/core` + `http-loader` | `^16` / `^17` | Both peer `@angular/core >=16` |
+| `rxjs` | `~7.8.1` | Angular 20 peers `^6.5.3 \|\| ^7.4.0` |
+| `zone.js` | `^0.15.1` | Angular 20 peers `~0.15.0` |
+| `primeflex` | `^3.3.1` | v4.0.0 is a rewrite — separate PR |
+| `primeicons` | `^7.0.0` | v8 exists — separate PR |
+| `jest-marbles` | `^3.1.1` | Only peers rxjs |
 
-Currently, when a clause is FULLY_SATISFIED, the preview displays:
+---
 
-* Clause Title ❌ (should not be displayed)
-* Clause Content ✅
+## 1. Ordering — do this first, it will bite you otherwise
 
-The expected behavior is:
+Your `package.json` pins `"ng-wings": "18.0.5-pre.4-1784195826216"` (exact, pre-release).
 
-* Clause Title ❌
-* Clause Content ✅
+**`ng-wings` must be built and published against Angular 20 before you touch `wings-front`.** An Angular-19-compiled library will fail `wings-front`'s AOT build with partial-compilation version errors, and you will not be able to tell whether a failure is yours or the library's.
 
-Only the clause content should be visible.
+Sequence:
+1. Upgrade + publish `ng-wings` (`f-ng-wings-lib`) to a v20 pre-release tag
+2. Then run this runbook on `wings-front`, bumping `ng-wings` to that tag in Phase 8
 
-Requirements
+---
 
-1. Identify where the preview rendering logic determines whether to display the clause title.
-2. Fix the logic so that:
-    * When documentStage === 'preview' and clause status is FULLY_SATISFIED, only the clause content is rendered.
-    * For all other statuses, retain the existing behavior.
-3. Do not modify the business logic used to determine clause satisfaction.
-4. Do not change any backend or API logic.
-5. Do not affect any functionality outside the Preview stage.
-6. Ensure there are no regressions in existing rendering behavior for other document stages or clause statuses.
-7. Before making changes, identify the root cause and update only the minimum amount of code necessary to resolve the issue.
+## 2. Phase 0 — Baseline and safety net
 
-The fix should be targeted, maintainable, and preserve all current functionality except for correcting the FULLY_SATISFIED preview rendering behavior.
+```bash
+node -v          # MUST be ^20.19.0 || ^22.12.0 || >=24.0.0 — Angular 20 rejects Node 18
+npm -v
+git switch -c feat/angular-20-upgrade
+git status        # must be clean
+```
+
+Prove the app is green on 19 first — you need a known-good reference point:
+
+```bash
+npm ci
+npm run build
+npm test
+```
+
+Inventory your patches now, before anything moves:
+
+```bash
+ls -la patches/
+cat patches/primeng*.patch | head -40
+```
+
+Record the exact installed PrimeNG version the current patch was generated against:
+
+```bash
+npm ls primeng --depth=0
+```
+
+Guard against the CRLF failure mode you have hit before:
+
+```bash
+grep -q "patch" .gitattributes 2>/dev/null || echo "*.patch text eol=lf" >> .gitattributes
+git add .gitattributes && git commit -m "chore: force LF for .patch files"
+```
+
+---
+
+## 3. Phase 1 — Clear the `ng update` blocker
+
+`@angular-builders/jest@19.0.1` peer-pins `@angular/core: ^19.0.0`. This **will** abort `ng update @angular/core@20`, exactly like `@angular-builders/jest@18` did on your v18→v19 run.
+
+Remove it temporarily rather than fighting it with `--force`:
+
+```bash
+npm pkg delete devDependencies.@angular-builders/jest
+npm install --legacy-peer-deps
+git commit -am "chore: temporarily drop @angular-builders/jest for ng update"
+```
+
+Bump node types in the same commit:
+
+```bash
+npm pkg set devDependencies.@types/node="^20.19.43"
+```
+
+> **Heads-up:** `@angular-builders/jest` (both v19 and v20) peers `@angular-devkit/build-angular ^20.0.0`, which is **not** in your `devDependencies` — you only have `@angular/build`. That peer is already unmet today, which means your installs are almost certainly running with `--legacy-peer-deps` or `--force`. Keep doing whatever you currently do; don't "fix" it mid-upgrade. If you want it clean later, add `@angular-devkit/build-angular@^20.3.34` as a devDependency in a separate PR.
+
+---
+
+## 4. Phase 2 — Core Angular + CLI + ESLint (one command)
+
+Run these together. Splitting them causes `ng update` to reject the second command because the workspace is already on v20:
+
+```bash
+npx @angular/cli@20 update @angular/core@20 @angular/cli@20 @angular-eslint@20
+```
+
+If it refuses over unrelated peers:
+
+```bash
+npx @angular/cli@20 update @angular/core@20 @angular/cli@20 @angular-eslint@20 --force
+```
+
+Let all schematics run. Then read what it changed before you build:
+
+```bash
+git diff --stat
+git diff angular.json tsconfig.json
+```
+
+Commit the migration output on its own:
+
+```bash
+git add -A && git commit -m "feat: ng update to Angular 20 core/CLI/eslint"
+```
+
+Then re-add the Jest builder at v20:
+
+```bash
+npm pkg set devDependencies.@angular-builders/jest="^20.0.0"
+npm install --legacy-peer-deps
+git commit -am "chore: @angular-builders/jest@20"
+```
+
+---
+
+## 5. Phase 3 — CDK, PrimeNG, and the theming decision
+
+```bash
+npx ng update @angular/cdk@20
+```
+
+PrimeNG is the real work in this upgrade. Bump it explicitly:
+
+```bash
+npm pkg set dependencies.primeng="^20.4.0"
+```
+
+**The theming package — pick one:**
+
+- **Option A (recommended for this PR):** bump the deprecated shim. `@primeng/themes@20.4.0` is published and is a thin re-export of `@primeuix/themes ^1.2.5`. **Zero import changes.** You get a deprecation warning and nothing else.
+  ```bash
+  npm pkg set dependencies.@primeng/themes="^20.4.0"
+  ```
+- **Option B:** do the rename now. `@primeng/themes` is formally deprecated ("no longer maintained").
+  ```bash
+  npm pkg delete dependencies.@primeng/themes
+  npm pkg set dependencies.@primeuix/themes="^1.2.5"
+  # then rewrite every import
+  grep -rln "@primeng/themes" src/ | xargs sed -i "s|@primeng/themes|@primeuix/themes|g"
+  ```
+
+Take Option A. You will need the rename before PrimeNG 21 anyway, but bundling it with a major Angular bump means two independent failure sources in one PR.
+
+```bash
+npm install --legacy-peer-deps
+```
+
+### PrimeNG 20 selector renames
+
+Grep for these across templates — the v19-deprecated names are gone in v20:
+
+```bash
+grep -rn "p-dropdown\|p-calendar\|p-inputSwitch\|p-overlayPanel\|p-sidebar\|p-tabView\|p-tabPanel\|p-chips\|p-messages" src/ --include="*.html" --include="*.ts" | wc -l
+```
+
+| Old | New |
+|---|---|
+| `p-dropdown` | `p-select` |
+| `p-calendar` | `p-datepicker` |
+| `p-inputSwitch` | `p-toggleswitch` |
+| `p-overlayPanel` | `p-popover` |
+| `p-sidebar` | `p-drawer` |
+| `p-tabView` / `p-tabPanel` | `p-tabs` / `p-tabpanel` (new structure, not a 1:1 swap) |
+| `p-chips` | `p-autocomplete` with `multiple` |
+| `p-messages` | `p-message` |
+
+`p-accordionTab` → `p-accordion-panel` you already handled during v19.
+
+**Verify this table against the official PrimeNG 20 migration guide before bulk-editing** — I'm working from the deprecation pattern, and the `p-tabs` change in particular is a structural rewrite rather than a rename. Do the mechanical ones with `sed`, do tabs by hand.
+
+Also check the corresponding module/class imports in your NgModules (`DropdownModule` → `SelectModule`, etc.), since a module-based app imports these explicitly — the selector grep alone will miss them.
+
+---
+
+## 6. Phase 4 — Regenerate the PrimeNG patch
+
+Your existing patch was generated against PrimeNG 19.1.x. Hunk offsets are now guaranteed stale. Do **not** hand-edit hunk headers.
+
+```bash
+rm patches/primeng*.patch
+npm install --legacy-peer-deps          # clean, unpatched node_modules/primeng
+# manually re-apply your fix inside node_modules/primeng/...
+npx patch-package primeng
+git add patches/ && git commit -m "chore: regenerate primeng patch for v20"
+```
+
+Confirm it actually applies from scratch:
+
+```bash
+rm -rf node_modules && npm install --legacy-peer-deps
+```
+
+Watch for `patch-package` reporting *applied* vs *failed* — a silent skip here surfaces much later as a mystery runtime bug.
+
+---
+
+## 7. Phase 5 — NgRx
+
+```bash
+npx ng update @ngrx/store@20
+npm pkg set devDependencies.@ngrx/schematics="^20.1.0"
+npm install --legacy-peer-deps
+```
+
+`ng update @ngrx/store` migrates the whole family (`effects`, `router-store`, `store-devtools`, `component-store`). Verify all five landed on `^20.x`:
+
+```bash
+npm ls @ngrx/store @ngrx/effects @ngrx/router-store @ngrx/store-devtools @ngrx/component-store --depth=0
+```
+
+---
+
+## 8. Phase 6 — Remaining dependencies
+
+```bash
+npm pkg set dependencies.@fortawesome/angular-fontawesome="^3.0.0"
+npm pkg set dependencies.ng-wings="<your-v20-prerelease-tag>"
+npm install --legacy-peer-deps
+```
+
+**FontAwesome is a two-major jump** (1 → 2 → 3). v1 peers `@angular/core ^19.0.0`, v2.0.1 and v3.0.0 both peer `^20.0.0`. Read the v2 and v3 changelogs — the `FaIconLibrary` / standalone-component surface changed across those releases. If it fights you, `^2.0.1` is a valid Angular 20 target and a smaller step.
+
+### Two things to watch
+
+**`@ngx-builders/analyze@4.0.0`** hard-pins `@angular-devkit/core@15.2.6` and `@angular-devkit/architect@0.1502.6`. That is five majors behind CLI 20 and there is no newer release. Test it explicitly:
+
+```bash
+npx ng run <project>:analyze
+```
+
+If it breaks, drop it — you already have `source-map-explorer@^2.5.3`, which does the same job without the architect coupling.
+
+**`angular2-multiselect-dropdown@^9.0.0`** — last published 2024-07-18, declares no peer dependencies, so npm won't block it. It'll almost certainly keep working since it works on 19. Not a v20 blocker, but it's now two years unmaintained and this is the fourth upgrade cycle it has survived. Worth a replacement ticket, not worth fixing here.
+
+---
+
+## 9. Phase 7 — Angular 20 code-level changes
+
+### `platformBrowserDynamic` is deprecated (optional but recommended)
+
+`@angular/platform-browser-dynamic@20.3.27` carries an npm deprecation: *"Use `@angular/platform-browser` instead."* I confirmed `platformBrowser` is exported from `@angular/platform-browser` v20.
+
+```ts
+// main.ts — before
+import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
+platformBrowserDynamic().bootstrapModule(AppModule);
+
+// after
+import { platformBrowser } from '@angular/platform-browser';
+platformBrowser().bootstrapModule(AppModule);
+```
+
+**Keep the `@angular/platform-browser-dynamic` package installed regardless.** Both `jest-preset-angular@14.6.2` and `@angular-builders/jest@20` peer-depend on it. Removing it breaks your test run even if no app code imports it.
+
+In test setup, `platformBrowserDynamicTesting` → `platformBrowserTesting` from `@angular/platform-browser/testing`.
+
+### Others to grep for
+
+```bash
+grep -rn "flushEffects\|provideExperimentalZonelessChangeDetection\|ng-reflect-" src/
+```
+
+- `TestBed.flushEffects()` → `TestBed.tick()`
+- `provideExperimentalZonelessChangeDetection` → `provideZonelessChangeDetection`
+- `ng-reflect-*` debug attributes are no longer emitted in dev mode — any test asserting on them fails
+
+`standalone: false` on NgModule-declared components you already handled in v19. Control-flow migration (`@if`/`@for`) is optional — **defer it**, as you did for v20 previously.
+
+---
+
+## 10. Phase 8 — Verify
+
+```bash
+rm -rf node_modules .angular dist
+npm install --legacy-peer-deps
+npx ng version                    # confirm 20.x across the board
+npm run build                     # dev
+npx ng build --configuration production
+npm test
+npx ng lint
+npm run start                     # smoke test by hand
+```
+
+Manual smoke checklist, weighted toward where the risk actually is:
+- Every screen using a renamed PrimeNG component
+- Theming/dark mode (whichever theming option you chose)
+- NgRx-heavy flows — effects firing, devtools connecting
+- Anything touching the patched PrimeNG behaviour
+- FontAwesome icons rendering
+- The `angular2-multiselect-dropdown` screens
+
+---
+
+## 11. Rollback
+
+Commit after every phase so you can bisect. If a phase goes bad:
+
+```bash
+git reset --hard HEAD~1
+rm -rf node_modules && npm ci
+```
+
+Keep the branch phase-by-phase rather than squashing until it's green — when the production build fails, you want to know it was Phase 3 and not Phase 6.
+
+---
+
+## Highest-risk items, ranked
+
+1. **`ng-wings` not rebuilt for v20 first** — blocks everything, and masks every other error
+2. **PrimeNG 19 → 20** — real template and NgModule churn across a large app
+3. **PrimeNG patch regeneration** — silent failures are the dangerous ones
+4. **Node runtime** — if CI still runs Node 18, the build dies before anything else runs
+5. **`@ngx-builders/analyze`** — five majors of devkit drift, no upgrade path
+6. **FontAwesome two-major jump** — contained, but no automated migration
