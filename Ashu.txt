@@ -1,0 +1,18 @@
+const ITERATIVE_SEL = 'span[data-block-type="dynamic-iterative"]';
+
+editor.on('NewBlock', (e) => {
+  const dom = editor.dom;
+  const block = e.newBlock;
+  if (!block) return;
+
+  const spans = dom.select(ITERATIVE_SEL, block);
+  if (!spans.length) return;
+
+  // unwrap (true = keep children), so a mid-span Enter keeps the remaining text
+  spans.forEach((span) => dom.remove(span, true));
+
+  if (dom.isEmpty(block)) {
+    block.innerHTML = '<br data-mce-bogus="1">';
+  }
+  editor.selection.setCursorLocation(block, 0);
+});
