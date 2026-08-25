@@ -1,18 +1,27 @@
-const ITERATIVE_SEL = 'span[data-block-type="dynamic-iterative"]';
+TASK: Extract duplicated "Configure Iterate" popup into one shared Angular component.
 
-editor.on('NewBlock', (e) => {
-  const dom = editor.dom;
-  const block = e.newBlock;
-  if (!block) return;
+CONTEXT
+- Duplicate popup markup + logic exists in:
+  1. <path/to/template.component.ts|html>
+  2. <path/to/clause.component.ts|html>
+- Stack: Angular, PrimeNG dialog, standalone/module = <fill in>, ngx-translate.
 
-  const spans = dom.select(ITERATIVE_SEL, block);
-  if (!spans.length) return;
+STEPS
+1. Read both components and diff the popup-related template, TS members, and styles. List what is identical vs what differs (labels, data source, save handler, validation).
+2. Create ConfigureIterateDialogComponent in <shared/components/configure-iterate-dialog/>.
+   - Move the shared template, logic, and SCSS there.
+   - Expose differences as @Input()s and @Output()s only. No `mode: 'template' | 'clause'` flags and no parent-type checks inside the child.
+   - Keep the dialog's visibility contract as `[(visible)]` (Input + Output) so parents keep control.
+3. Replace the popup blocks in both parents with <app-configure-iterate-dialog>, wiring the inputs/outputs. Delete now-unused members, imports, and SCSS from both parents.
+4. Register/import the component correctly (module declarations or standalone `imports`) and export it if it's used across modules.
 
-  // unwrap (true = keep children), so a mid-span Enter keeps the remaining text
-  spans.forEach((span) => dom.remove(span, true));
+CONSTRAINTS
+- Behavior must stay identical — no UX or validation changes.
+- Do not rename existing public inputs/outputs of the two parent components.
+- Keep translation keys as-is; pass them in as inputs if they differ.
+- Strict TS: no `any`, define an interface for the config payload.
 
-  if (dom.isEmpty(block)) {
-    block.innerHTML = '<br data-mce-bogus="1">';
-  }
-  editor.selection.setCursorLocation(block, 0);
-});
+OUTPUT
+- New component files in full.
+- Unified diffs for both parent components.
+- Short list of anything you couldn't safely deduplicate and why.
