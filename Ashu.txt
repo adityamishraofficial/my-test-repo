@@ -1,39 +1,86 @@
-BUG: Nested iteration blocks when configuring text inside an already-iterated block.
+BUG: Nested dynamic-iterative blocks are still being created, and the popup cannot prefill existing values.
 
-CURRENT (wrong)
-- An iterative block exists in the TinyMCE editor: a span with data-block-type="dynamic-iterative" (plus data-var / data-entity).
-- User selects a word INSIDE that block and triggers "Configure Iteration Block".
-- With Display Mode = "Inline (same line)", the code wraps the selected word in a NEW nested dynamic-iterative span. Result: an iterate inside an iterate. See attached — "testing" gets its own dashed border inside "text for testing".
+EVIDENCE (from the app's Source Code view)
+<p><span data-block-type="dynamic-iterative" class="iterative-block"
+         data-block-separator="" data-block-terminator="">ghjdnjhgj
+     <span data-block-type="dynamic-iterative" class="iterative-block"
+           data-block-separator="" data-block-terminator="">jhgjdf</span> jhjkgh
+     <span data-block-type="dynamic-iterative" class="iterative-block"
+           data-block-separator="" data-block-terminator="">jkhhgfk</span>
+   </span></p>
 
-EXPECTED
-- If the current selection/caret is inside (or exactly on) an existing dynamic-iterative block, do NOT create a new block.
-- Instead open the same popup in EDIT mode for the EXISTING block, prefilled with its current values (variable, display mode, separator, terminator).
-- Save must UPDATE the existing block's attributes in place — no new wrapper span, no duplicated markup.
-- Cancel must leave the DOM untouched.
+Note: NO attribute stores the source variable or the display mode. Only separator/terminator persist.
 
-STEPS
-1. Grep the repo for the handler that opens the Configure Iteration popup and the code that creates the dynamic-iterative span. Do not guess file paths or TinyMCE API shapes — read the actual code first.
-2. Add a helper, e.g.:
-   getEnclosingIterativeBlock(editor): HTMLElement | null
-   - Use editor.dom.getParent(editor.selection.getNode(), '[data-block-type="dynamic-iterative"]').
-   - Also handle the case where the selection's common ancestor or its start/end containers sit inside the block (partial selections, text-node starts).
-3. In the open-popup handler, call the helper BEFORE any wrapping logic:
-   - If it returns an element → read its attributes into the popup model, set mode = 'edit', keep a reference to that element.
-   - If null → existing create flow, unchanged.
-4. On Save: if mode === 'edit', mutate the existing span's attributes (setAttrib) and re-render its visual state. Only run the wrap/insert path when mode === 'create'.
-5. Apply the guard for ALL display modes, not just Inline — Inline is just where it surfaced.
+EXISTING CODE (do not assume — open and read these before editing)
+- handleDblClick(e) in the template/clause editor component.
+- It already does:
+    const iterativeBlock = editor.dom.getParent(target,
+      '[data-block-type="dynamic-iterative"], span.iterative-block, p.iterative-block, div.iterative-block, li.iterative-block, td.iterative-block, th.iterative-block');
+    if (iterativeBlock) { e.preventDefault(); this.handleIterativeContentDoubleClick(editor, iterativeBlock); return; }
+- Despite that guard, nesting still happens. Find out why before changing anything.
 
-EDGE CASES to handle explicitly
-- Selection spans the boundary (starts inside the block, ends outside): treat as edit of the enclosing block, do not wrap.
-- Selection fully CONTAINS one or more iterative blocks: do not silently nest — block the action and surface the existing "cannot nest" message if one exists, otherwise return early.
-- Collapsed caret inside the block with no text selected.
-- Block nested inside a dynamic table cell (data-repeat="row") must still resolve to the nearest dynamic-iterative ancestor.
+ROOT CAUSES TO VERIFY AND FIX (in this order)
+
+1. GUARD IS IN THE WRONG PLACE.
+   The guard is on the dblclick entry point only. Locate the function that actually inserts/wraps
+   the iterative span (the popup's Save handler and/or the toolbar/menu "Configure Iteration Block"
+   action). Move the ancestor check INTO that insert function so every entry point is covered:
+     if (editor.dom.getParent(rangeNode, '[data-block-type="dynamic-iterative"]')) -> UPDATE, never wrap.
+   Make the insert function the single choke point. It must be impossible to create a block whose
+   ancestor is already a block, regardless of which caller invoked it.
+
+2. handleIterativeContentDoubleClick LIKELY STILL CALLS THE CREATE PATH ON SAVE.
+   Trace it. It receives the existing element but probably opens the popup and, on Save, calls the
+   same wrap/insert routine. It must instead:
+     - stash the passed iterativeBlock element reference,
+     - set mode = 'edit',
+     - on Save call editor.dom.setAttrib(...) on that stashed element only,
+     - never touch the current selection.
+
+3. WRONG WINDOW FOR SELECTION CLEARING (probable reason the word stays selected).
+   handleDblClick calls window.getSelection().removeAllRanges(). TinyMCE renders in an iframe, so
+   window.getSelection() is the OUTER document's selection and clears nothing inside the editor.
+   The double-clicked word therefore remains selected, and the Save handler wraps it.
+   Replace with the editor's own selection API:
+     editor.selection.collapse(true);            // or
+     editor.getDoc().defaultView.getSelection().removeAllRanges();
+   Confirm which is correct by checking whether the editor is in iframe or inline mode.
+
+4. VARIABLE AND DISPLAY MODE ARE NOT PERSISTED — prefill is currently impossible.
+   Add attributes on the span when creating/updating:
+     data-block-variable, data-block-entity, data-block-display-mode
+   Register them so TinyMCE does not strip them on any getContent/setContent round-trip:
+     extended_valid_elements: 'span[class|style|data-block-type|data-block-variable|data-block-entity|data-block-display-mode|data-block-separator|data-block-terminator|contenteditable]'
+   Then have edit mode read all five values back into the popup form.
+   Keep reading the existing separator/terminator attribute names exactly as-is — do not rename them.
+
+5. DEFENSIVE UNWRAP.
+   Add a sanitize step that unwraps any dynamic-iterative span whose ancestor is also one
+   (editor.dom.remove(el, true) keeps children). Run it on editor init, on setContent, and after
+   the Source Code dialog saves — existing documents already contain nested blocks and must heal.
+
+6. MINOR FIXES IN THE SAME HANDLER
+   - The clause lookup is a manual unbounded while-loop over parentNode; it walks past the editor
+     body. Replace with editor.dom.getParent(target, '.clause').
+   - Attribute name is misspelled: getAttribute('cluase-id'). Check the DOM for the real spelling
+     and fix, or support both if templates already contain the typo.
+
+ACCEPTANCE CRITERIA
+- Double-clicking a word inside an existing iterative block opens the popup in edit mode with
+  variable, display mode, separator and terminator prefilled from that block's attributes.
+- Save updates the existing span's attributes in place; Source Code view shows NO nested
+  data-block-type="dynamic-iterative" spans.
+- Cancel leaves the DOM byte-identical.
+- Selecting plain text outside any block still creates a new block as before.
+- A selection that fully contains one or more existing blocks does not wrap; return early.
+- Behaviour identical for all display modes, not just Inline.
 
 CONSTRAINTS
-- No behavior change for the normal create flow on plain text.
-- Do not alter the HTML attribute contract (data-block-type, data-var, data-entity, data-repeat).
-- Strict TS, no `any`. Reuse existing types for the config payload.
+- Strict TS, no `any` in new code (handleDblClick's `e: any` may be narrowed to Event/MouseEvent).
+- Do not rename existing data-block-* attributes.
+- Apply the same fix to BOTH template and clause editors, or to the shared component if one exists.
 
 OUTPUT
-- Unified diffs only, plus the new helper in full.
-- One-line explanation of where the old code wrapped the selection and why the guard was missing.
+- Unified diffs.
+- State explicitly which of causes 1-3 was the actual reason nesting survived the existing guard.
+
