@@ -1,86 +1,34 @@
-BUG: Nested dynamic-iterative blocks are still being created, and the popup cannot prefill existing values.
+You are writing unit tests for an Angular project (Karma + Jasmine).
 
-EVIDENCE (from the app's Source Code view)
-<p><span data-block-type="dynamic-iterative" class="iterative-block"
-         data-block-separator="" data-block-terminator="">ghjdnjhgj
-     <span data-block-type="dynamic-iterative" class="iterative-block"
-           data-block-separator="" data-block-terminator="">jhgjdf</span> jhjkgh
-     <span data-block-type="dynamic-iterative" class="iterative-block"
-           data-block-separator="" data-block-terminator="">jkhhgfk</span>
-   </span></p>
+Target: @<path/to/file.ts>
+Existing spec (if any): @<path/to/file.spec.ts>
 
-Note: NO attribute stores the source variable or the display mode. Only separator/terminator persist.
+Steps:
+1. Read the target file and list every method/getter/setter and every branch
+   (if/else, ternaries, ?., ??, switch cases, early returns, catch blocks,
+   loop-empty vs loop-populated).
+2. Read the existing spec and the coverage report to identify what is already
+   covered. Do NOT duplicate existing tests — only add what's missing.
+3. Follow the test patterns already used in this repo (TestBed setup, mock
+   style, import paths). Grep a nearby *.spec.ts first instead of inventing
+   a style.
+4. Mock all injected dependencies with `jasmine.createSpyObj` or minimal stub
+   providers. No real HTTP (use `HttpClientTestingModule`), no real store —
+   provide a mock `Store` whose `select`/`pipe` returns `of(...)`.
+5. Write one `describe` per method, with a test per branch. Include
+   null/undefined/empty-array inputs and error paths explicitly.
+6. For async code use `fakeAsync` + `tick()` (or `waitForAsync` for template
+   compilation), and call `fixture.detectChanges()` where template bindings
+   are asserted.
 
-EXISTING CODE (do not assume — open and read these before editing)
-- handleDblClick(e) in the template/clause editor component.
-- It already does:
-    const iterativeBlock = editor.dom.getParent(target,
-      '[data-block-type="dynamic-iterative"], span.iterative-block, p.iterative-block, div.iterative-block, li.iterative-block, td.iterative-block, th.iterative-block');
-    if (iterativeBlock) { e.preventDefault(); this.handleIterativeContentDoubleClick(editor, iterativeBlock); return; }
-- Despite that guard, nesting still happens. Find out why before changing anything.
+Rules:
+- Do NOT modify the source file. If a branch is untestable without changing
+  it, list it at the end under "Unreachable — needs refactor" and explain why.
+- No `any` casts unless unavoidable; prefer typed partial mocks.
+- Use Jasmine APIs only (`spyOn`, `jasmine.createSpyObj`, `.and.returnValue`),
+  never Jest (`jest.fn`, `jest.spyOn`, `mockReturnValue`).
+- Every spy on a void method must still be asserted with
+  `toHaveBeenCalledWith`, not just `toHaveBeenCalled`, where args matter.
 
-ROOT CAUSES TO VERIFY AND FIX (in this order)
-
-1. GUARD IS IN THE WRONG PLACE.
-   The guard is on the dblclick entry point only. Locate the function that actually inserts/wraps
-   the iterative span (the popup's Save handler and/or the toolbar/menu "Configure Iteration Block"
-   action). Move the ancestor check INTO that insert function so every entry point is covered:
-     if (editor.dom.getParent(rangeNode, '[data-block-type="dynamic-iterative"]')) -> UPDATE, never wrap.
-   Make the insert function the single choke point. It must be impossible to create a block whose
-   ancestor is already a block, regardless of which caller invoked it.
-
-2. handleIterativeContentDoubleClick LIKELY STILL CALLS THE CREATE PATH ON SAVE.
-   Trace it. It receives the existing element but probably opens the popup and, on Save, calls the
-   same wrap/insert routine. It must instead:
-     - stash the passed iterativeBlock element reference,
-     - set mode = 'edit',
-     - on Save call editor.dom.setAttrib(...) on that stashed element only,
-     - never touch the current selection.
-
-3. WRONG WINDOW FOR SELECTION CLEARING (probable reason the word stays selected).
-   handleDblClick calls window.getSelection().removeAllRanges(). TinyMCE renders in an iframe, so
-   window.getSelection() is the OUTER document's selection and clears nothing inside the editor.
-   The double-clicked word therefore remains selected, and the Save handler wraps it.
-   Replace with the editor's own selection API:
-     editor.selection.collapse(true);            // or
-     editor.getDoc().defaultView.getSelection().removeAllRanges();
-   Confirm which is correct by checking whether the editor is in iframe or inline mode.
-
-4. VARIABLE AND DISPLAY MODE ARE NOT PERSISTED — prefill is currently impossible.
-   Add attributes on the span when creating/updating:
-     data-block-variable, data-block-entity, data-block-display-mode
-   Register them so TinyMCE does not strip them on any getContent/setContent round-trip:
-     extended_valid_elements: 'span[class|style|data-block-type|data-block-variable|data-block-entity|data-block-display-mode|data-block-separator|data-block-terminator|contenteditable]'
-   Then have edit mode read all five values back into the popup form.
-   Keep reading the existing separator/terminator attribute names exactly as-is — do not rename them.
-
-5. DEFENSIVE UNWRAP.
-   Add a sanitize step that unwraps any dynamic-iterative span whose ancestor is also one
-   (editor.dom.remove(el, true) keeps children). Run it on editor init, on setContent, and after
-   the Source Code dialog saves — existing documents already contain nested blocks and must heal.
-
-6. MINOR FIXES IN THE SAME HANDLER
-   - The clause lookup is a manual unbounded while-loop over parentNode; it walks past the editor
-     body. Replace with editor.dom.getParent(target, '.clause').
-   - Attribute name is misspelled: getAttribute('cluase-id'). Check the DOM for the real spelling
-     and fix, or support both if templates already contain the typo.
-
-ACCEPTANCE CRITERIA
-- Double-clicking a word inside an existing iterative block opens the popup in edit mode with
-  variable, display mode, separator and terminator prefilled from that block's attributes.
-- Save updates the existing span's attributes in place; Source Code view shows NO nested
-  data-block-type="dynamic-iterative" spans.
-- Cancel leaves the DOM byte-identical.
-- Selecting plain text outside any block still creates a new block as before.
-- A selection that fully contains one or more existing blocks does not wrap; return early.
-- Behaviour identical for all display modes, not just Inline.
-
-CONSTRAINTS
-- Strict TS, no `any` in new code (handleDblClick's `e: any` may be narrowed to Event/MouseEvent).
-- Do not rename existing data-block-* attributes.
-- Apply the same fix to BOTH template and clause editors, or to the shared component if one exists.
-
-OUTPUT
-- Unified diffs.
-- State explicitly which of causes 1-3 was the actual reason nesting survived the existing guard.
-
+Output the complete updated spec file, then the command to verify:
+`ng test --code-coverage --include=<path/to/file.spec.ts> --watch=false`
