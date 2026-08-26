@@ -1,27 +1,39 @@
-TASK: Extract duplicated "Configure Iterate" popup into one shared Angular component.
+BUG: Nested iteration blocks when configuring text inside an already-iterated block.
 
-CONTEXT
-- Duplicate popup markup + logic exists in:
-  1. <path/to/template.component.ts|html>
-  2. <path/to/clause.component.ts|html>
-- Stack: Angular, PrimeNG dialog, standalone/module = <fill in>, ngx-translate.
+CURRENT (wrong)
+- An iterative block exists in the TinyMCE editor: a span with data-block-type="dynamic-iterative" (plus data-var / data-entity).
+- User selects a word INSIDE that block and triggers "Configure Iteration Block".
+- With Display Mode = "Inline (same line)", the code wraps the selected word in a NEW nested dynamic-iterative span. Result: an iterate inside an iterate. See attached — "testing" gets its own dashed border inside "text for testing".
+
+EXPECTED
+- If the current selection/caret is inside (or exactly on) an existing dynamic-iterative block, do NOT create a new block.
+- Instead open the same popup in EDIT mode for the EXISTING block, prefilled with its current values (variable, display mode, separator, terminator).
+- Save must UPDATE the existing block's attributes in place — no new wrapper span, no duplicated markup.
+- Cancel must leave the DOM untouched.
 
 STEPS
-1. Read both components and diff the popup-related template, TS members, and styles. List what is identical vs what differs (labels, data source, save handler, validation).
-2. Create ConfigureIterateDialogComponent in <shared/components/configure-iterate-dialog/>.
-   - Move the shared template, logic, and SCSS there.
-   - Expose differences as @Input()s and @Output()s only. No `mode: 'template' | 'clause'` flags and no parent-type checks inside the child.
-   - Keep the dialog's visibility contract as `[(visible)]` (Input + Output) so parents keep control.
-3. Replace the popup blocks in both parents with <app-configure-iterate-dialog>, wiring the inputs/outputs. Delete now-unused members, imports, and SCSS from both parents.
-4. Register/import the component correctly (module declarations or standalone `imports`) and export it if it's used across modules.
+1. Grep the repo for the handler that opens the Configure Iteration popup and the code that creates the dynamic-iterative span. Do not guess file paths or TinyMCE API shapes — read the actual code first.
+2. Add a helper, e.g.:
+   getEnclosingIterativeBlock(editor): HTMLElement | null
+   - Use editor.dom.getParent(editor.selection.getNode(), '[data-block-type="dynamic-iterative"]').
+   - Also handle the case where the selection's common ancestor or its start/end containers sit inside the block (partial selections, text-node starts).
+3. In the open-popup handler, call the helper BEFORE any wrapping logic:
+   - If it returns an element → read its attributes into the popup model, set mode = 'edit', keep a reference to that element.
+   - If null → existing create flow, unchanged.
+4. On Save: if mode === 'edit', mutate the existing span's attributes (setAttrib) and re-render its visual state. Only run the wrap/insert path when mode === 'create'.
+5. Apply the guard for ALL display modes, not just Inline — Inline is just where it surfaced.
+
+EDGE CASES to handle explicitly
+- Selection spans the boundary (starts inside the block, ends outside): treat as edit of the enclosing block, do not wrap.
+- Selection fully CONTAINS one or more iterative blocks: do not silently nest — block the action and surface the existing "cannot nest" message if one exists, otherwise return early.
+- Collapsed caret inside the block with no text selected.
+- Block nested inside a dynamic table cell (data-repeat="row") must still resolve to the nearest dynamic-iterative ancestor.
 
 CONSTRAINTS
-- Behavior must stay identical — no UX or validation changes.
-- Do not rename existing public inputs/outputs of the two parent components.
-- Keep translation keys as-is; pass them in as inputs if they differ.
-- Strict TS: no `any`, define an interface for the config payload.
+- No behavior change for the normal create flow on plain text.
+- Do not alter the HTML attribute contract (data-block-type, data-var, data-entity, data-repeat).
+- Strict TS, no `any`. Reuse existing types for the config payload.
 
 OUTPUT
-- New component files in full.
-- Unified diffs for both parent components.
-- Short list of anything you couldn't safely deduplicate and why.
+- Unified diffs only, plus the new helper in full.
+- One-line explanation of where the old code wrapped the selection and why the guard was missing.
