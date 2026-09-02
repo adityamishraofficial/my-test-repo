@@ -1,34 +1,44 @@
-You are writing unit tests for an Angular project (Karma + Jasmine).
+TASK: Diagnose and fix table column overflow in our TinyMCE template editor.
 
-Target: @<path/to/file.ts>
-Existing spec (if any): @<path/to/file.spec.ts>
+CONTEXT
+- Angular (NgModule) app; TinyMCE wrapped in a template-editor component.
+- Table cells contain variable tokens as spans, e.g.
+  <span data-var="..." data-table-type="..." data-repeat="row">{{Base Amount_Amounts Currencies}}</span>
+- Backend expands rows/variables and renders the saved HTML to PDF.
 
-Steps:
-1. Read the target file and list every method/getter/setter and every branch
-   (if/else, ternaries, ?., ??, switch cases, early returns, catch blocks,
-   loop-empty vs loop-populated).
-2. Read the existing spec and the coverage report to identify what is already
-   covered. Do NOT duplicate existing tests — only add what's missing.
-3. Follow the test patterns already used in this repo (TestBed setup, mock
-   style, import paths). Grep a nearby *.spec.ts first instead of inventing
-   a style.
-4. Mock all injected dependencies with `jasmine.createSpyObj` or minimal stub
-   providers. No real HTTP (use `HttpClientTestingModule`), no real store —
-   provide a mock `Store` whose `select`/`pipe` returns `of(...)`.
-5. Write one `describe` per method, with a test per branch. Include
-   null/undefined/empty-array inputs and error paths explicitly.
-6. For async code use `fakeAsync` + `tick()` (or `waitForAsync` for template
-   compilation), and call `fixture.detectChanges()` where template bindings
-   are asserted.
+SYMPTOM
+With 10-12 columns and a variable in every cell, columns overflow the page
+width in BOTH the editor and the generated PDF. Near-zero-width leftover
+columns appear at the right edge of the table.
 
-Rules:
-- Do NOT modify the source file. If a branch is untestable without changing
-  it, list it at the end under "Unreachable — needs refactor" and explain why.
-- No `any` casts unless unavoidable; prefer typed partial mocks.
-- Use Jasmine APIs only (`spyOn`, `jasmine.createSpyObj`, `.and.returnValue`),
-  never Jest (`jest.fn`, `jest.spyOn`, `mockReturnValue`).
-- Every spy on a void method must still be asserted with
-  `toHaveBeenCalledWith`, not just `toHaveBeenCalled`, where args matter.
+STEP 1 - INVESTIGATE (report findings with file:line before changing code)
+1. Locate the TinyMCE init config. Report current table_sizing_mode,
+   table_column_resizing, table_default_styles, table_default_attributes,
+   content_style.
+2. Check whether px widths are written to table / colgroup / col / td / th
+   and persisted into saved template HTML. Inspect one saved template.
+3. Check the column-insert and "Iterate" code paths: do they redistribute
+   widths, or append to the table total?
+4. Check for stale <col> entries or trailing empty cells.
+5. Check whether the PDF/render stylesheet mirrors the editor CSS.
 
-Output the complete updated spec file, then the command to verify:
-`ng test --code-coverage --include=<path/to/file.spec.ts> --watch=false`
+STEP 2 - PROPOSE
+- List all plausible causes, ranked by likelihood, each with evidence.
+- Give two solution options with tradeoffs:
+  (a) equal columns: table-layout: fixed + width: 100%
+  (b) content-proportional: auto layout + overflow-wrap: anywhere
+  Recommend one and say why.
+- Propose a width-normalization routine that runs on table mutation
+  (init/TableModified/NewCell/SetContent) and again before save, stripping
+  width attributes/styles and stale colgroups.
+- Propose page-level handling for 10-12 columns in the renderer
+  (landscape, reduced font size).
+
+CONSTRAINTS
+- Do not change the span attribute contract (data-var, data-table-type,
+  data-repeat, data-entity).
+- Editor CSS and PDF CSS must stay in sync.
+- Output a patch/diff per file. No unrelated refactors.
+- Wait for my approval before applying changes.
+
+
