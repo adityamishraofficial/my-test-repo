@@ -1,19 +1,4 @@
-diff --git a/node_modules/primeng/fesm2022/primeng-table.mjs b/node_modules/primeng/fesm2022/primeng-table.mjs
-index 41c6e9d..9d7cd5e 100644
---- a/node_modules/primeng/fesm2022/primeng-table.mjs
-+++ b/node_modules/primeng/fesm2022/primeng-table.mjs
-@@ -2314,10 +2314,12 @@ class Table extends BaseComponent {
-         for (const [, filterMetadata] of Object.entries(this.filters)) {
-             if (Array.isArray(filterMetadata)) {
-                 for (let filter of filterMetadata) {
--                    filter.value = null;
-+                    if (filter && typeof filter === 'object') {
-+                        filter.value = null;
-+                    }
-                 }
-             }
--            else if (filterMetadata) {
-+            else if (filterMetadata && typeof filterMetadata === 'object') {
-                 filterMetadata.value = null;
-             }
-         }
+npx ng update @angular/core --migrate-only --from=20.3.27 --to=21.2.22
+npx ng update @angular/cli --migrate-only --from=20.3.34 --to=21.2.22
+npx ng update @angular/cdk --migrate-only --from=20.2.14 --to=21.2.14
+npx ng update @angular-eslint/schematics --migrate-only --from=20.7.0 --to=21.4.0
