@@ -1,44 +1,139 @@
-TASK: Diagnose and fix table column overflow in our TinyMCE template editor.
+# Task: fix table cell content overflowing into adjacent cells in the document-template PREVIEW
 
-CONTEXT
-- Angular (NgModule) app; TinyMCE wrapped in a template-editor component.
-- Table cells contain variable tokens as spans, e.g.
-  <span data-var="..." data-table-type="..." data-repeat="row">{{Base Amount_Amounts Currencies}}</span>
-- Backend expands rows/variables and renders the saved HTML to PDF.
+## Repo context
+Angular (NgModule-based) app: wings-front. It contains a TinyMCE-based document
+template editor plus a separate read-only PREVIEW that renders the parsed
+template HTML. The editor renders correctly; only the preview is broken.
 
-SYMPTOM
-With 10-12 columns and a variable in every cell, columns overflow the page
-width in BOTH the editor and the generated PDF. Near-zero-width leftover
-columns appear at the right edge of the table.
+## Bug
+In the preview, long unbreakable cell text (e.g. "G2506DE000628689" rendered from
+a variable span) paints over the neighbouring cells instead of wrapping onto the
+next line inside its own cell.
 
-STEP 1 - INVESTIGATE (report findings with file:line before changing code)
-1. Locate the TinyMCE init config. Report current table_sizing_mode,
-   table_column_resizing, table_default_styles, table_default_attributes,
-   content_style.
-2. Check whether px widths are written to table / colgroup / col / td / th
-   and persisted into saved template HTML. Inspect one saved template.
-3. Check the column-insert and "Iterate" code paths: do they redistribute
-   widths, or append to the table total?
-4. Check for stale <col> entries or trailing empty cells.
-5. Check whether the PDF/render stylesheet mirrors the editor CSS.
+Sample of the parsed preview HTML (abridged):
 
-STEP 2 - PROPOSE
-- List all plausible causes, ranked by likelihood, each with evidence.
-- Give two solution options with tradeoffs:
-  (a) equal columns: table-layout: fixed + width: 100%
-  (b) content-proportional: auto layout + overflow-wrap: anywhere
-  Recommend one and say why.
-- Propose a width-normalization routine that runs on table mutation
-  (init/TableModified/NewCell/SetContent) and again before save, stripping
-  width attributes/styles and stale colgroups.
-- Propose page-level handling for 10-12 columns in the renderer
-  (landscape, reduced font size).
+<div data-rendered-preview="true"><div class="page" style="font-family: 'BNPP Sans'; height: 1503px;">
+<table border="1" style="border-collapse: collapse; table-layout: fixed; width: 100.074%; ; width: 100%;" data-table-type="static"><colgroup>
+<col style="width: 14.7437%;"><col style="width: 9.41085%;"> ... <col style="width: 2.82325%;"></colgroup>
+<tbody><tr>
+<td style="border: 0.995025px solid rgb(0, 0, 0);;  overflow-wrap: anywhere;"><span style="font-size: 4pt;">
+<span class="variable noneditable" id="variableId-295" variable-id="295" format-type="string" group-name="References" transpose-type="exact">
+{{Guarantee Id_References}} </span> </span></td>
+</tr></tbody></table></div></div>
 
-CONSTRAINTS
-- Do not change the span attribute contract (data-var, data-table-type,
-  data-repeat, data-entity).
-- Editor CSS and PDF CSS must stay in sync.
-- Output a patch/diff per file. No unrelated refactors.
-- Wait for my approval before applying changes.
+## Confirmed root causes (do not re-diagnose, fix these)
+1. The <col> width percentages sum to ~100.38%, so the browser proportionally
+   rescales every column and the defined widths are not honoured. The <table>
+   also carries a duplicated width declaration ("width: 100.074%; ; width: 100%;").
+2. The content has no usable break opportunity in the preview:
+   - the wrap rules exist only in TinyMCE's content_css, which the preview does
+     not load;
+   - `.variable.noneditable` is styled as an inline-block chip, and an
+     inline-block sizes to max-content, so `overflow-wrap` on the ancestor <td>
+     cannot shrink it. Only `word-break: break-all` on the chip itself will.
+   - `table-layout: fixed` + default `overflow: visible` on <td> +
+     `border-collapse: collapse` means the overflow paints over the next cell.
 
+## Step 1 — Discovery (report findings before editing)
+Search the repo and list the exact file paths for each:
+- the preview component: grep for `data-rendered-preview`, `class="page"`,
+  and `[innerHTML]`
+- the TinyMCE init/config: grep for `content_css`, `content_style`, `tinymce.init`
+- existing `.variable` / `.noneditable` chip styles: grep for
+  `.variable`, `noneditable`
+- the code that serializes table/col styles: grep for `colgroup`, `table-layout`,
+  `data-table-type`
 
+Also report:
+- whether the preview uses `bypassSecurityTrustHtml` or plain `[innerHTML]`
+  (plain `[innerHTML]` may strip inline style attributes — say so if it does)
+- the preview component's `ViewEncapsulation` setting
+
+## Step 2 — Add preview CSS
+Because the preview HTML is injected (not part of the template), component-scoped
+styles will NOT apply to it. Put these rules in the global stylesheet
+(src/styles.scss or its equivalent in this repo), OR in the preview component's
+stylesheet using `:host ::ng-deep`. Choose based on what the repo already does
+for injected preview HTML, and say which you chose and why.
+
+.page table[data-table-type] {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.page table[data-table-type] td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  vertical-align: top;
+}
+
+.page table[data-table-type] td .variable,
+.page table[data-table-type] td span {
+  display: inline;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+Do NOT add `overflow: hidden` to the <td>. The row must grow taller; content
+must not be clipped.
+
+If TinyMCE's content_css already contains equivalent rules, extract them into one
+shared stylesheet imported by both content_css and the preview, so editor and
+preview stay in sync. Do not change any other editor styling.
+
+## Step 3 — Normalize colgroup widths
+Add this helper next to the existing table-serialization code (match the file's
+existing naming and export conventions):
+
+function normalizeColWidths(table: HTMLTableElement): void {
+  const cols = Array.from(table.querySelectorAll('col'));
+  const widths = cols.map(c => parseFloat(c.style.width) || 0);
+  const sum = widths.reduce((a, b) => a + b, 0);
+  if (!sum) return;
+  const factor = 100 / sum;
+  cols.forEach((col, i) => {
+    col.style.width = `${+(widths[i] * factor).toFixed(4)}%`;
+  });
+  table.style.width = '100%';
+  table.style.tableLayout = 'fixed';
+}
+
+Call it on every `table[data-table-type]` in BOTH places:
+- when template HTML is saved/serialized from the editor
+- when the preview renders the HTML
+so the two paths produce identical numbers.
+
+## Step 4 — Clean malformed style strings
+Find the code that concatenates inline style strings and stop it producing empty
+declarations (`;;`) and duplicate properties (`width` twice on the same element).
+Deduplicate by property name, keeping the LAST occurrence, and collapse repeated
+semicolons. Add a small pure helper for this rather than inlining regexes at each
+call site.
+
+## Constraints
+- Minimal diff. No refactors, no renames, no reformatting of untouched lines.
+- No new dependencies. No Angular/TinyMCE version changes.
+- Do not change the HTML attribute contract on variable spans (data-table-type,
+  data-repeat, data-var, data-entity, variable-id, format-type, group-name,
+  transpose-type) or any backend expansion logic.
+- Do not modify editor typing/cursor behaviour.
+- TypeScript strict-safe; no `any`.
+
+## Acceptance criteria
+1. Preview column widths exactly match the normalized <col> percentages
+   (verify via DevTools: each <td> offsetWidth / table clientWidth).
+2. "G2506DE000628689" wraps inside its own cell; nothing paints over a
+   neighbouring cell; the row grows taller instead.
+3. Computed style on the inner `.variable` span in preview shows
+   `display: inline`, `white-space: normal`, `word-break: break-all`.
+4. Editor rendering and typing behaviour are unchanged.
+5. Existing unit tests pass; add one test for normalizeColWidths covering
+   sum > 100, sum < 100, sum === 0, and missing/invalid width values.
+
+## Output
+Work file by file. For each file show the path and a unified diff. After the last
+change, list the manual verification steps you performed and anything you could
+not verify.
