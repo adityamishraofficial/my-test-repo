@@ -1,3 +1,26 @@
+Fix the TinyMCE table issues in my Angular application.
+
+1. There is too much gap between words inside some table cells. Fix the table text alignment/CSS so words are displayed normally without unwanted justification/spacing.
+
+2. Make the table columns manually resizable in TinyMCE, like Microsoft Word — I should be able to hold and drag the column border/edge to increase or decrease the width.
+
+3. The overall table width should also be adjustable where supported.
+
+Please inspect the existing TinyMCE configuration and CSS first, then make the minimal changes required. Do not change or upgrade any dependencies and do not affect the existing A4/document layout or other editor functionality.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 I need you to fix the TinyMCE table behavior in my existing Angular application.
 
 IMPORTANT:
