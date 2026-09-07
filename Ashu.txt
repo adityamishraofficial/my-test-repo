@@ -1,30 +1,18 @@
-Bug: TinyMCE table left/right alignment has no visual effect after the
-first click.
-
-Root cause already identified — do not re-investigate the serializer or
-the ControlValueAccessor. The alignment style IS preserved. The table's
-style attribute ends up as:
-
-  ...margin-right: 0px; margin-left: auto; width: 42.1282%; ; width: 100%;
-
-Two width declarations; the last one wins, so the table computes to 100%
-width, and margin-left:auto has no free space to consume. The duplicated
-property and the empty ";" declaration mean the style attribute is being
-built by string concatenation, not via editor.dom.setStyles().
-
-Tasks:
-1. Find the code that appends "width: 100%" to a <table> style attribute.
-   Search the TS sources for: "width: 100%", cssText, setAttribute('style',
-   style.width =, and handlers registered on editor.on('NodeChange') /
-   editor.on('SetContent') / editor.on('BeforeSetContent').
-   The editor wraps content in <div class="page">, so check any page-fit
-   or table-normalization logic tied to that wrapper.
-2. Report which handler re-applies the width and on which event.
-3. Fix: apply the default table width only when a table is inserted, not
-   on every node change, and always via editor.dom.setStyles(el, {...}) so
-   the declaration is replaced rather than appended.
-4. Add handling so aligning a 100%-width table also relaxes its width
-   (alignment is a no-op at full width) — propose the approach before
-   implementing.
-
-Do not modify valid_elements / valid_styles / table_style_by_css.
+Locate the preview builder. Search for: data-rendered-preview,
+   'overflow-wrap', 'min-width: 0px', 'table-layout: fixed', offsetWidth,
+   getBoundingClientRect, DOMParser, and any *preview* service/util that
+   transforms the editor HTML before the backend call.
+2. Report the exact function and where the width/colgroup values are
+   recomputed.
+3. Fix it to preserve author geometry:
+   - set table width only when style.width is absent
+   - never emit width:100% on a table that has margin-left:auto or
+     margin-right:auto (alignment requires free horizontal space)
+   - keep existing <col> widths; distribute evenly only when every col
+     lacks a width
+   - stop measuring the DOM; read declared style values from the parsed
+     HTML instead
+   - keep the non-geometry print styles (overflow-wrap, vertical-align)
+4. Confirm whether stripping <tr> height was intentional; if not, preserve it.
+5. Verify the backend does not apply its own table-width normalization
+   after receiving this HTML.
