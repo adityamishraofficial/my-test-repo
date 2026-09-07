@@ -1,18 +1,39 @@
-Locate the preview builder. Search for: data-rendered-preview,
-   'overflow-wrap', 'min-width: 0px', 'table-layout: fixed', offsetWidth,
-   getBoundingClientRect, DOMParser, and any *preview* service/util that
-   transforms the editor HTML before the backend call.
-2. Report the exact function and where the width/colgroup values are
-   recomputed.
-3. Fix it to preserve author geometry:
-   - set table width only when style.width is absent
-   - never emit width:100% on a table that has margin-left:auto or
-     margin-right:auto (alignment requires free horizontal space)
-   - keep existing <col> widths; distribute evenly only when every col
-     lacks a width
-   - stop measuring the DOM; read declared style values from the parsed
-     HTML instead
-   - keep the non-geometry print styles (overflow-wrap, vertical-align)
-4. Confirm whether stripping <tr> height was intentional; if not, preserve it.
-5. Verify the backend does not apply its own table-width normalization
-   after receiving this HTML.
+Bug: table width is not retained in the backend preview HTML.
+
+Editor HTML (correct):
+  <table style="... width: 61.2347%; margin-right: 0px; margin-left: auto;">
+  <colgroup><col style="width: 33.4085%"> x3
+
+Preview HTML (wrong):
+  <table style="... width: auto; margin-right: 0px; margin-left: auto;
+                table-layout: fixed;">
+  <colgroup><col style="width: 33.4085%"> x3
+
+Root cause: the preview normalizer overwrites the table's declared width
+(it previously forced 100%, now it forces auto). width:auto +
+table-layout:fixed + percentage <col> widths is circular, so the fixed
+layout algorithm collapses the table to min-content width. The rendered
+preview shows a tiny table at the right edge.
+
+Fix the preview normalizer:
+1. Never overwrite an existing table style.width. Apply a default of 100%
+   ONLY when width is absent or "auto".
+2. Remove any rule that sets width:auto or width:100% because the table
+   has margin-left:auto / margin-right:auto. Alignment works at any
+   width below 100%; no compensation is needed.
+3. If table-layout:fixed is applied, guarantee the table width is
+   resolvable (percentage or px) - never auto.
+4. Convert auto margins into explicit percentage margins so server-side
+   renderers honour alignment:
+     right  -> margin-left: (100 - width)%   margin-right: 0
+     left   -> margin-left: 0                margin-right: (100 - width)%
+     center -> both margins: (100 - width)/2 %
+   Only when width is a percentage below 100.
+5. Keep <col> widths exactly as authored. Distribute evenly only when
+   every <col> lacks a width.
+
+Also report:
+- whether stripping <tr> height (currently emitted as style="") is
+  intentional
+- which server-side renderer generates the preview, so we can confirm
+  percentage table widths and margin support
