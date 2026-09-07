@@ -1,401 +1,112 @@
-# Angular 20 → 21 upgrade runbook — f-ng-wings-lib
+I need you to fix the TinyMCE table behavior in my existing Angular application.
 
-All versions below were queried live from the npm registry on 1 Sep 2026. Nothing here is estimated.
+IMPORTANT:
+- Do NOT rewrite or redesign the existing editor.
+- Do NOT upgrade Angular, TinyMCE, PrimeNG, or any other dependency.
+- Do NOT make unrelated changes.
+- First inspect the existing TinyMCE configuration, table-related CSS, and code that generates/inserts table HTML.
+- Understand the existing implementation before making changes.
+- Preserve all existing functionality.
 
----
+PROBLEM 1 — HUGE SPACING BETWEEN WORDS IN TABLE CELLS
 
-## 0. Version reality check
+In some TinyMCE tables, text inside a cell has an abnormally large gap between words.
 
-| Train | Latest published |
-|---|---|
-| Angular 21 (your target) | **21.2.22** |
-| Angular 22 | 22.1.4 — **not** your target |
+Example:
+"Commission Amount Invoiced"
 
-Angular 21.0.0 shipped 2025-11-19; the 21.x line is mature.
+is displayed with large spaces between the words, as if the text is justified across the entire cell.
 
-**Critical:** `ng update @angular/core` with no version pin will jump you to 22. Always write `@angular/core@21`.
+Find the actual root cause in the existing implementation. Check for:
+- text-align: justify
+- inline styles such as text-align: justify
+- CSS applied to td/th/p
+- TinyMCE alignment configuration
+- generated HTML containing <p style="text-align: justify">
+- inherited document/editor CSS
 
-Package majors do **not** all track Angular. Verified ceilings for the Angular-21 line:
+Fix this properly so normal table-cell text does NOT get unwanted word spacing.
 
-| Package | Angular-21-compatible max |
-|---|---|
-| `@angular/*` (core, common, forms, router, animations, compiler, platform-browser) | `21.2.22` |
-| `@angular/cli`, `@angular-devkit/build-angular`, `@angular/build` | `21.2.22` |
-| `@angular/cdk` | `21.2.14` (patch cadence differs from core — do not force 21.2.22) |
-| `ng-packagr` | `21.2.7` |
-| `@angular-eslint/*` | `21.4.0` |
-| `primeng` | `21.1.9` (peer: `@angular/core ^21.0.7`) |
-| `@primeuix/themes` | `^2.0.3` — **not 3.x** |
-| `jest-preset-angular` | `17.0.0` |
-| `typescript` | `~5.9.3` — **not 6.x** |
+Do NOT blindly force every piece of document content to left alignment. The application may support text alignment elsewhere. The fix should specifically prevent unwanted justification/word stretching in table cells while preserving the user's ability to intentionally align text where appropriate.
 
-Node: `^20.19.0 || ^22.12.0 || >=24.0.0`. Check `node -v` before you start.
+PROBLEM 2 — MANUALLY RESIZABLE TABLE COLUMNS
 
----
+I want TinyMCE tables to behave more like Microsoft Word tables.
 
-## 1. Hard blockers (these break `npm install` or the build)
+The user should be able to:
+- Move the mouse over the boundary between two columns.
+- See the resize cursor.
+- Click and drag the column boundary.
+- Increase/decrease the column width manually.
+- Keep the other table content/layout stable as much as reasonably possible.
 
-**1. `jest-preset-angular@14.6.2` — install-level hard fail.**
-Its peer range is `@angular/core >=15.0.0 <21.0.0`. It cannot coexist with Angular 21. Must go to `17.0.0` (peer `>=20.0.0 <23.0.0`), which forces:
-- `jest` 29 → `^30.5.1` (jpa 17 peers `jest ^30.0.0`)
-- `@types/jest` 29 → `^30.0.0`
-- `jsdom >=26` as an explicit devDependency (peer requirement)
-- `jest-environment-jsdom@^30.5.1` if you reference it in `jest.config`
+Inspect the current TinyMCE version and use configuration/options compatible with THAT VERSION.
 
-**2. TypeScript ceiling is 5.9, not 6.0.**
-- `@angular/compiler-cli@21` peers `typescript >=5.9 <6.1`
-- `ng-packagr@21.2.7` peers `typescript >=5.9 <6.0` ← **the binding constraint, because this is a library**
+Check whether the following options are appropriate for the installed version:
 
-So: `~5.9.3`. TS 6.0.3 is the Angular 22 step, not this one.
+table_resize_bars
+table_sizing_mode
+table_column_resizing
+object_resizing
 
-**3. `@fortawesome/angular-fontawesome@3.0.0` → `4.0.0`.**
-v4.0.0 peers `@angular/core ^21.0.0`; v5.x peers `^22.0.0`. v4.0.0 depends on `@fortawesome/fontawesome-svg-core ^7.1.0`, so both FA icon packages move 6.5.2 → `^7.3.1`. **FontAwesome v7 renamed icons** — expect `far`/`fas` import breakage.
+Do not add options blindly if they are unsupported by the installed TinyMCE version.
 
-**4. `@primeuix/themes@1.2.5` → `^2.0.3`. Do not take 3.0.0.**
-- `primeng@21.1.9` depends on `@primeuix/styled ^0.7.4`
-- `@primeuix/themes@2.0.3` depends on `@primeuix/styled ^0.7.4` ✅
-- `@primeuix/themes@3.0.0` depends on `@primeuix/styled ^1.0.0` ❌ (that's the PrimeNG 22 pairing)
+PROBLEM 3 — TABLE WIDTH
 
-Same logic for `primeicons`: stay on `^7.0.0`. `primeicons@8.0.0` was published the same day as themes 3.0.0 — it's the PrimeNG 22 era.
+I also want the overall table width to be adjustable where TinyMCE supports it.
 
-**5. `primeng` ships no `ng-update` schematics.** I checked the 21.1.9 manifest: no `ng-update` key. Every PrimeNG 20→21 change is manual. Budget time for this separately from the Angular bump.
+If TinyMCE supports table-level resizing in the current version/configuration, enable it without breaking column resizing.
 
-**6. `@angular/platform-browser-dynamic@21.2.22` is published but flagged deprecated on npm:**
-> "@angular/platform-browser-dynamic is deprecated. Use `@angular/platform-browser` instead."
+The editor is used for document-style/A4 content, so make sure the solution does not cause tables to overflow the editor/A4 page unnecessarily.
 
-Your module-based bootstrap needs to move (see §5). `platformBrowser()` is exported from `@angular/platform-browser@21` and returns a `PlatformRef`, so `.bootstrapModule()` works unchanged.
+IMPORTANT A4/DOCUMENT REQUIREMENTS:
+- Do not break the existing A4 page layout.
+- Do not introduce horizontal scrolling unnecessarily.
+- Do not cause tables to overflow the printable page.
+- Preserve existing table borders, fonts, padding, and styling.
+- Do not change PDF/DOCX export behavior unless required for the fix.
+- Preserve existing page-break functionality.
 
-**Good news:** the legacy webpack `browser` builder still exists in `@angular-devkit/build-angular@21.2.22` and is not marked deprecated in its `builders.json`. Your showcase app can stay on webpack.
+IMPLEMENTATION PROCESS:
 
----
+1. Inspect package.json/package-lock and determine the exact TinyMCE version.
+2. Find the TinyMCE Angular component/configuration.
+3. Find all table-related CSS.
+4. Find where table HTML is generated, inserted, pasted, or transformed.
+5. Find why text is being justified/stretched inside cells.
+6. Determine the correct TinyMCE configuration for manual table/column resizing for the installed version.
+7. Implement the smallest clean fix.
+8. Search the entire project for conflicting CSS/configuration that could override the fix.
+9. Check for duplicate TinyMCE configurations.
+10. Run the project's build/type-check/lint/test commands that are appropriate.
+11. Fix any errors introduced by your changes.
+12. Do not modify unrelated files.
 
-## 2. Sequencing
+EXPECTED RESULT:
 
-1. **f-ng-wings-lib** (this repo) → build → publish to the internal registry
-2. **wings-front** → only after the library is published
+Before:
+| Commission Amount Invoiced       |
+|                                   |
+The words may appear excessively spaced.
 
-The library's `peerDependencies` gate everything downstream, so this order is not optional.
+After:
+| Commission Amount Invoiced |
+|                            |
 
----
+And for column resizing:
 
-## 3. Step-by-step
+| Column A | Column B | Column C |
+          ↑
+      user can drag this boundary left/right
 
-### Step 1 — Baseline
+The user should be able to manually adjust the table column widths directly inside TinyMCE.
 
-```bash
-git checkout -b chore/angular-21
-git status                     # must be clean
-node -v                        # must satisfy ^20.19 || ^22.12 || >=24
-npx ng version
-```
+IMPORTANT:
+Before changing anything, inspect the existing implementation and explain briefly:
+- Which file(s) contain the TinyMCE configuration.
+- What is causing the word-spacing problem.
+- What is currently preventing/limiting table resizing.
 
-### Step 2 — Park the PrimeNG patch before anything else
+Then implement the fix.
 
-`patch-package` will fail against the new PrimeNG and can abort the install. Get it out of the way first:
-
-```bash
-mkdir -p .patches-parked
-git mv patches/primeng+20.*.patch .patches-parked/ 2>/dev/null || mv patches/primeng+20.*.patch .patches-parked/
-```
-
-You'll regenerate it for `primeng+21.1.9` in Step 9. (Standing recommendation, unchanged: overriding `clear()` in the ng-wings table wrapper to sanitize filters upstream would end this per-major regeneration cycle for good.)
-
-### Step 3 — The one big `ng update` call
-
-`@angular-eslint` must be in the same command as core, or you get an unresolvable peer graph mid-update:
-
-```bash
-npx ng update \
-  @angular/core@21 \
-  @angular/cli@21 \
-  @angular/cdk@21 \
-  @angular-eslint/schematics@21
-```
-
-`@angular/cli@21`'s `packageGroup` pulls `@angular/build`, `@angular/ssr`, `@angular-devkit/*` to 21.2.22 automatically. `ng-packagr` is **not** in that group — bump it by hand in Step 4.
-
-If it refuses over `jest-preset-angular`, that's blocker #1. Do Step 4 first, then re-run Step 3.
-
-### Step 4 — Hand-bump everything `ng update` doesn't own
-
-See §4 for the complete target `package.json` block. Then:
-
-```bash
-rm -rf node_modules package-lock.json
-npm install --ignore-scripts
-npm ls @angular/core @angular/cdk primeng typescript ng-packagr
-```
-
-`--ignore-scripts` skips `patch-package` on this pass. Drop it once Step 9 is done.
-
-### Step 5 — Review what the migrations did
-
-The v21 core collection declares these migrations:
-
-| Migration | Optional? |
-|---|---|
-| `application-config-core` — moves `ApplicationConfig` import from `@angular/platform-browser` to `@angular/core` | no |
-| `bootstrap-options-migration` — deprecated `bootstrapModule` options → providers | no |
-| `router-last-successful-navigation` | no |
-| `control-flow-migration` — rewrites templates to `@if` / `@for` / `@switch` | **not flagged optional in v21** (it *was* flagged optional in v20) |
-| `router-current-navigation` | optional |
-| `add-bootstrap-context-to-server-main` | no |
-
-Plus from `@schematics/angular@21`:
-
-| Migration | Optional? |
-|---|---|
-| `update-typescript-lib` — bumps tsconfig `lib` to es2022+ | no |
-| `update-module-resolution` — sets `moduleResolution: "bundler"` | no |
-| `remove-default-karma-config` | no |
-| `use-application-builder` — webpack `browser` → esbuild `application` | optional, "recommended" |
-
-**Two things to check on your diff immediately:**
-
-```bash
-git diff --stat
-git diff -- '*.html'
-```
-
-- **Control flow rewrite.** If templates were rewritten and you don't want that in this PR, revert just those files (`git checkout -- 'src/**/*.html'`) and keep the rest. Doing the framework bump and a global template rewrite in one commit makes bisecting a nightmare.
-- **`moduleResolution: "bundler"`.** This is your recurring biter: it breaks deep imports into packages that lack an `exports` map entry. Build immediately after and fix the deep imports, or temporarily hold `moduleResolution: "node"` in `tsconfig.json` and address it as a follow-up.
-
-**Skip `use-application-builder`.** Your showcase app uses the legacy webpack `browser` builder; that builder is still supported in v21, and swapping the build system in the same PR as the framework bump is a bad trade.
-
-### Step 6 — Library `peerDependencies` (easy to miss)
-
-The screenshots show the **workspace** `package.json`. The library's own manifest — `projects/f-ng-wings-lib/package.json` — carries the peer range consumers resolve against:
-
-```json
-"peerDependencies": {
-  "@angular/common": "^21.0.0",
-  "@angular/core": "^21.0.0",
-  "@angular/forms": "^21.0.0",
-  "@angular/router": "^21.0.0",
-  "@angular/cdk": "^21.0.0",
-  "primeng": "^21.0.0",
-  "rxjs": "^7.8.0"
-}
-```
-
-If this still says `^20.0.0`, wings-front will resolve a contradictory graph after the bump. Also bump the library `version` for the internal publish.
-
-### Step 7 — Bootstrap code changes
-
-`main.ts` (showcase app):
-
-```ts
-// before
-import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
-
-platformBrowserDynamic()
-  .bootstrapModule(AppModule)
-  .catch(err => console.error(err));
-
-// after
-import { platformBrowser } from '@angular/platform-browser';
-
-platformBrowser()
-  .bootstrapModule(AppModule)
-  .catch(err => console.error(err));
-```
-
-Then sweep the whole repo:
-
-```bash
-grep -rn "platform-browser-dynamic" --include="*.ts" .
-```
-
-Test setup files are the usual stragglers. Remove `@angular/platform-browser-dynamic` from `package.json` once the grep is clean.
-
-If you pass bootstrap options (`ngZoneEventCoalescing`, `ngZoneRunCoalescing`), `bootstrap-options-migration` should have converted them to `provideZoneChangeDetection({...})` providers — verify it did.
-
-### Step 8 — Jest 30 / jest-preset-angular 17
-
-**`jest-preset-angular/setup-jest` no longer exists.** I confirmed against both tarballs: 14.6.2 ships `setup-jest.js`; 17.0.0 ships only `setup-env/zone` and `setup-env/zoneless`.
-
-```ts
-// setup-jest.ts — before
-import 'jest-preset-angular/setup-jest';
-
-// after (you are zone-based; zone.js is still in your deps)
-import 'jest-preset-angular/setup-env/zone';
-```
-
-Also check:
-- `ts-jest` is a *dependency* of jest-preset-angular 17. You can drop your explicit `ts-jest` devDependency, or keep it pinned at `^29.4.12` — do not try for a `ts-jest@30`, it doesn't exist.
-- Any `testEnvironment: 'jsdom'` reference needs `jest-environment-jsdom@^30.5.1` installed.
-- Jest 30 tightened `testMatch` and removed some deprecated globals config. Run the suite early; failures here are noisy but shallow.
-
-```bash
-npx jest --clearCache && npm test
-```
-
-### Step 9 — PrimeNG 21 pass, then regenerate the patch
-
-```bash
-npm run build:lib   # or your ng-packagr build script
-```
-
-Fix PrimeNG 21 API/selector fallout from the compiler errors, checking the PrimeNG 21 migration notes as you go. Once the app builds and runs:
-
-```bash
-# apply your clearFilterValues null/type-guard fix by hand in
-# node_modules/primeng/fesm2022/primeng-table.mjs
-npx patch-package primeng
-git add patches/primeng+21.1.9.patch
-```
-
-Your `.gitattributes` should already carry `*.patch text eol=lf` — confirm it does before committing, or the CRLF drift will bite on the next machine.
-
-Then a clean verification install with scripts enabled:
-
-```bash
-rm -rf node_modules && npm install
-```
-
-### Step 10 — Verify and publish
-
-```bash
-npx ng lint
-npm test
-npm run build:lib
-npm run build            # showcase app
-npm pack ./dist/f-ng-wings-lib   # inspect before publishing
-```
-
-Publish to the internal registry, then start wings-front against the new version.
-
-### Rollback
-
-```bash
-git checkout . && git clean -fd
-git checkout main && rm -rf node_modules && npm ci
-```
-
----
-
-## 4. Target `package.json` (copy-paste)
-
-```json
-"dependencies": {
-  "@angular/animations": "^21.2.22",
-  "@angular/cdk": "^21.2.14",
-  "@angular/common": "^21.2.22",
-  "@angular/compiler": "^21.2.22",
-  "@angular/core": "^21.2.22",
-  "@angular/forms": "^21.2.22",
-  "@angular/platform-browser": "^21.2.22",
-  "@angular/router": "^21.2.22",
-  "@fortawesome/angular-fontawesome": "^4.0.0",
-  "@fortawesome/fontawesome-svg-core": "^7.3.1",
-  "@fortawesome/free-solid-svg-icons": "^7.3.1",
-  "@ngx-translate/core": "^16.0.4",
-  "@primeuix/themes": "^2.0.3",
-  "angular2-multiselect-dropdown": "^9.0.0",
-  "autonumeric": "^4.10.10",
-  "concurrently": "^8.2.2",
-  "copyfiles": "^2.4.1",
-  "fast-json-patch": "^3.1.1",
-  "font-awesome": "^4.7.0",
-  "lodash": "^4.17.21",
-  "node-fetch": "^3.3.2",
-  "primeicons": "^7.0.0",
-  "primeng": "^21.1.9",
-  "rxjs": "^7.8.2",
-  "tslib": "^2.8.1",
-  "zone.js": "~0.15.1"
-},
-"devDependencies": {
-  "@angular-devkit/build-angular": "^21.2.22",
-  "@angular-eslint/builder": "^21.4.0",
-  "@angular-eslint/eslint-plugin": "^21.4.0",
-  "@angular-eslint/eslint-plugin-template": "^21.4.0",
-  "@angular-eslint/schematics": "^21.4.0",
-  "@angular-eslint/template-parser": "^21.4.0",
-  "@angular/cli": "^21.2.22",
-  "@angular/compiler-cli": "^21.2.22",
-  "@angular/language-service": "^21.2.22",
-  "@faker-js/faker": "^8.0.2",
-  "@types/jest": "^30.0.0",
-  "@types/lodash": "^4.17.25",
-  "@typescript-eslint/eslint-plugin": "^8.69.0",
-  "@typescript-eslint/parser": "^8.69.0",
-  "connect": "^3.7.0",
-  "eslint": "^9.39.5",
-  "jest": "^30.5.1",
-  "jest-environment-jsdom": "^30.5.1",
-  "jest-preset-angular": "^17.0.0",
-  "jsdom": "^30.0.1",
-  "ng-packagr": "^21.2.7",
-  "ts-jest": "^29.4.12",
-  "typescript": "~5.9.3"
-}
-```
-
-Notes on specific lines:
-
-- **`@angular/platform-browser-dynamic` is gone** — deliberately removed (§1.6, §5).
-- **`@ngx-translate/core` stays at `^16.0.4`.** Its peer is `@angular/core >=16`, so Angular 21 is fine. 17.0.0 and 18.0.0 exist if you want them, but they're not required — leave them out of this PR.
-- **`zone.js ~0.15.1` is fine.** `@angular/core@21` peers `zone.js ~0.15.0 || ~0.16.0`. `~0.16.2` is available if you want it; no reason to touch it now.
-- **`angular2-multiselect-dropdown` left alone.** Latest is 10.0.0, last published July 2024, and it declares no Angular peer at all — so npm won't complain either way, but nothing about it is Angular-21-aware. Still the right candidate for replacement with `p-multiselect`, and still a separate piece of work.
-- **`concurrently` / `@faker-js/faker`** have much newer majors (10.x). Deliberately unchanged — pure tooling, zero Angular coupling, no reason to add risk to this PR.
-
----
-
-## 5. Roo Code / Qwen prompt for the mechanical pass
-
-Mechanical renames only. It must not touch anything structural.
-
-```
-You are editing an Angular 20 → 21 library workspace (f-ng-wings-lib).
-Apply ONLY the mechanical changes listed below. Do not refactor, reformat,
-reorder imports, or change anything not explicitly listed.
-
-MECHANICAL CHANGES — apply everywhere in *.ts:
-
-1. Replace:
-     import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
-   with:
-     import { platformBrowser } from '@angular/platform-browser';
-   and replace every call `platformBrowserDynamic()` with `platformBrowser()`.
-   Leave the chained `.bootstrapModule(...)` argument list untouched.
-
-2. If `ApplicationConfig` is imported from '@angular/platform-browser',
-   move that named import to '@angular/core'. Merge into an existing
-   '@angular/core' import statement if one is already present in the file.
-
-3. Replace `import 'jest-preset-angular/setup-jest';`
-   with    `import 'jest-preset-angular/setup-env/zone';`
-
-STOP AND REPORT — do not edit, just list file + line + what you found:
-
-- Any remaining reference to '@angular/platform-browser-dynamic'
-  that rules 1–3 do not cover.
-- Any FontAwesome icon import that fails to resolve under
-  @fortawesome/free-solid-svg-icons v7 (v7 renamed icons).
-- Any PrimeNG component, selector, or input that no longer type-checks
-  under primeng 21.
-- Any deep import (a path with a '/' past the package name) into a
-  node_modules package, since moduleResolution is now "bundler".
-
-Do NOT rewrite templates to @if / @for / @switch control flow.
-Do NOT change any version number in any package.json.
-Do NOT modify files under patches/.
-Output a diff for the mechanical changes and a separate plain list for
-the STOP AND REPORT findings.
-```
-
----
-
-## 6. Post-upgrade quick reference
-
-| Symptom | Cause |
-|---|---|
-| `ERESOLVE` naming `jest-preset-angular` | still on 14.x, peer caps at `<21.0.0` |
-| `TS2307` on a deep `node_modules` import | `moduleResolution: "bundler"` |
-| `setup-jest` module not found | entry point removed in jpa 15+ |
-| Theme tokens render wrong / undefined | `@primeuix/themes` on 1.x or 3.x instead of 2.x |
-| `ng update` landed you on 22.x | version pin omitted from the command |
-| `patch-package` fails on install | patch still named `primeng+20.*.patch` |
-| ng-packagr rejects your TypeScript | you went to 6.0.x; ng-packagr@21 caps at `<6.0` |
+Do not just tell me what code I should change. Make the changes directly in the existing project.
