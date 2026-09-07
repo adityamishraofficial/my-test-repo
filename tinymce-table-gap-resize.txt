@@ -1,0 +1,344 @@
+# Task: (1) remove the excessive vertical gap between stacked lines inside table cells, (2) make the table width manually resizable by dragging its handles
+
+## Repo context
+Angular (NgModule-based) app: wings-front. It contains a TinyMCE-based document
+template editor plus a separate read-only PREVIEW that renders the parsed
+template HTML into a `<div data-rendered-preview="true"><div class="page">`.
+Tables are marked `data-table-type` and carry a `<colgroup>` of `<col style="width:NN%">`.
+Variable placeholders are `<span class="variable noneditable" variable-id="..." ...>`.
+Both bugs below are visible in the EDITOR; bug 1 also reaches the preview and the
+printed/PDF output.
+
+## Bug 1 — huge vertical gap between two labels in the same cell
+Header cells stack two or three short labels in one cell
+("Guarantee Amount" / "(CCY)", "Fee Start Date" / "Fee End Date", "Rate" / "(%)",
+"MinMax Amount" / "Applied?"). The gap between them is 70-90px instead of ~4px,
+and the whole row is consequently 3-4x taller than it needs to be.
+The same happens in the data row: "27-Jul-26" sits at the top of the cell and
+"27-Aug-26" near the bottom.
+
+Representative bad HTML (this is the shape you must handle):
+
+  <td style="border:1px solid #000; height:96px;">
+    <p style="line-height:2;">Fee Start Date</p>
+    <p>&nbsp;</p>
+    <p>&nbsp;</p>
+    <p>Fee End Date</p>
+  </td>
+
+## Bug 2 — table width is not manually adjustable
+The user wants to grab the table's corner/edge handles (or a column border) and
+drag to change the table's width, and have that width persist through save,
+reload and preview. Today either no handles appear, or a dragged width is
+silently reverted on save/preview.
+
+## Confirmed root causes — do NOT re-diagnose these, fix them
+
+### Bug 1
+1. **Whitespace-only filler paragraphs** (`<p>&nbsp;</p>`, `<p><span> </span></p>`,
+   `<p><br></p>`) between the two labels. Each one is a full line box plus
+   paragraph margins. This is the dominant contributor to a 70-90px gap.
+   CSS alone CANNOT fix this: `p:empty` does **not** match `<p>&nbsp;</p>`
+   because `&nbsp;` is a real text node. It must be stripped from the HTML.
+2. **Default paragraph margins.** `forced_root_block` is `p`, so every line the
+   user types in a cell becomes its own `<p>`, and the editor iframe's UA
+   stylesheet applies `p { margin: 1em 0 }` — ~14-16px per boundary after margin
+   collapsing. This is the secondary contributor.
+3. **Pasted `height` / `line-height` / `min-height`** as inline styles or legacy
+   `height="96"` attributes on `<tr>` / `<td>` / `<p>`, plus Word artifacts
+   (`class="MsoNormal"`, `mso-*` declarations, `<o:p>`), forcing tall rows.
+4. **Runs of `<br><br><br>`** used as spacing in the original template.
+
+Key reasoning you must not get wrong: `vertical-align` does **not** distribute a
+cell's content to its top and bottom edges. Therefore the space *between* the two
+labels is real block content (filler paragraphs / margins / line-height), and the
+tall row is a *consequence* of it, not the cause. Setting `vertical-align` will
+not fix this bug. Do not try.
+
+### Bug 2
+1. `object_resizing` and/or the table-resize options are not configured in the
+   TinyMCE init, so the drag affordances are unavailable or partially disabled.
+   There are two distinct affordances and both must work:
+   - the **corner/edge handles** around the whole table (`object_resizing`) —
+     these change the table's overall width/height; this is what the user means
+     by "hold any table vertices and adjust";
+   - the **thin resize bars** on column/row borders (`table_resize_bars`) —
+     these change column widths, and with `table_column_resizing: 'resizetable'`
+     also change the total table width.
+2. **The serializer reverts the width.** `normalizeColWidths()` (added for the
+   earlier preview-overflow fix) ends with `table.style.width = '100%'`
+   unconditionally, on both the save path and the preview path. Any width the
+   user drags is therefore overwritten on the next save/render. This is the most
+   likely reason "manual resize doesn't work" even when the handles do appear.
+3. **The preview stylesheet also forces it.** The global preview rule
+   `.page table[data-table-type] { width: 100% }` overrides the table's own
+   inline width in the preview.
+4. If the preview injects HTML with plain `[innerHTML]`, Angular's HTML sanitizer
+   strips `style` attributes — which removes both the table width and the cell
+   styles. The preview must use `DomSanitizer.bypassSecurityTrustHtml`.
+5. The table (or an ancestor) may sit inside a non-editable region. TinyMCE will
+   not resize anything inside `contenteditable="false"`. The app already uses a
+   `noneditable` class on variable spans — verify that class (or
+   `noneditable_class` / `noneditable_regexp`) does not cover the table or a
+   wrapper around it.
+
+## Step 0 — Establish these facts and report them BEFORE editing any file
+Do not guess any of these, and do not invent TinyMCE option names. Look them up.
+1. The exact TinyMCE major.minor version from `package.json` / the lockfile, and
+   whether it is self-hosted or cloud. Then verify **every** option you use below
+   against the docs for *that* version (options were renamed and removed between
+   TinyMCE 5, 6, 7 and 8 — e.g. the `paste` and `noneditable` plugins were merged
+   into core in 6, and self-hosted 7+ requires `license_key`). If an option in
+   this prompt does not exist in the installed version, say so and name the
+   correct equivalent instead of using it anyway.
+2. The current TinyMCE init object(s): full contents, and specifically whether
+   `plugins` includes `table`, and the current values of `object_resizing`,
+   `table_resize_bars`, `table_column_resizing`, `table_sizing_mode`,
+   `table_use_colgroups`, `content_css`, `content_style`, `valid_elements`,
+   `valid_styles`, `invalid_styles`, `readonly`.
+3. Whether the preview uses `bypassSecurityTrustHtml` or plain `[innerHTML]`.
+4. The preview component's `ViewEncapsulation` setting.
+5. Whether `normalizeColWidths()` and the style-string dedupe helper from the
+   earlier preview fix already exist, and every call site of each.
+
+## Step 1 — Discovery (report exact file paths)
+Search the repo and list the path for each:
+- the TinyMCE init/config: grep for `content_css`, `content_style`, `tinymce.init`,
+  `object_resizing`, `plugins:`
+- the preview component: grep for `data-rendered-preview`, `class="page"`, `[innerHTML]`
+- the table/col serialization code: grep for `colgroup`, `table-layout`,
+  `data-table-type`, `normalizeColWidths`
+- the shared/global stylesheet used as `content_css`: grep for what the init points at
+- existing `.variable` / `noneditable` styles and any `noneditable_class` config
+
+## Step 2 — One shared stylesheet for cell spacing
+The editor renders its content inside an **iframe**. Angular component styles —
+even with `ViewEncapsulation.None` or `::ng-deep` — CANNOT reach into it. Cell
+CSS must be delivered through TinyMCE's `content_css` (a stylesheet URL) or
+`content_style` (a CSS string). If the previous fix already created a shared
+stylesheet imported by both `content_css` and the preview, add these rules to it.
+If not, create one and wire it into both. Do not duplicate the rules in two files.
+
+  /* --- shared by TinyMCE content_css, the preview, and print --- */
+
+  table[data-table-type] {
+    border-collapse: collapse;
+  }
+
+  table[data-table-type] td,
+  table[data-table-type] th {
+    padding: 3px 6px;
+    line-height: 1.25;
+    vertical-align: top;
+  }
+
+  /* the gap killer: block children of a cell carry no vertical margin */
+  table[data-table-type] td > p,
+  table[data-table-type] th > p,
+  table[data-table-type] td > div,
+  table[data-table-type] th > div {
+    margin: 0;
+  }
+
+  /* replace it with one small, deliberate gap between stacked lines */
+  table[data-table-type] td > p + p,
+  table[data-table-type] th > p + p,
+  table[data-table-type] td > div + div,
+  table[data-table-type] th > div + div {
+    margin-top: 2px;
+  }
+
+  /* lists inside cells must keep their own spacing and indent */
+  table[data-table-type] td ul,
+  table[data-table-type] td ol,
+  table[data-table-type] th ul,
+  table[data-table-type] th ol {
+    margin: 2px 0 2px 1.2em;
+    padding-left: 0;
+  }
+
+  /* fallback against pasted fixed heights that the sanitizer missed.
+     [style*="height"] also matches line-height/min-height, which is harmless
+     because only the `height` property is overridden here. */
+  table[data-table-type] tr[style*="height"],
+  table[data-table-type] td[style*="height"],
+  table[data-table-type] th[style*="height"] {
+    height: auto !important;
+    min-height: 0 !important;
+  }
+
+  @media print {
+    .page table[data-table-type] {
+      max-width: 100%;
+      table-layout: fixed;
+    }
+    .page table[data-table-type] td {
+      overflow-wrap: anywhere;
+    }
+  }
+
+Scoping rule: every selector must be scoped to `table[data-table-type]`. Do not
+write a bare `p { margin: 0 }` — that would flatten paragraph spacing in ordinary
+body text throughout every document.
+
+## Step 3 — Sanitizer for the filler markup (this is the real fix for Bug 1)
+Add a pure, DOM-based helper next to the existing table-serialization code,
+matching that file's naming and export conventions. TypeScript strict-safe, no `any`.
+
+  export function normalizeCellSpacing(html: string): string
+
+Behaviour, in this order, operating only inside `table[data-table-type]`:
+1. Parse with `new DOMParser().parseFromString(html, 'text/html')`. Never mutate
+   the live document.
+2. In every `td` / `th`, remove child block elements (`p`, `div`) that are
+   **blank**: `textContent` matches `/^[\s ​  ]*$/` after
+   also treating a lone `<br>` as blank, AND the element contains none of
+   `img, table, .variable, [variable-id], [data-var], input`. Never remove a
+   block that contains a variable span, even an empty-looking one.
+3. If a cell then has exactly one child `<p>` and that `<p>` has no attributes
+   (no `class`, no `style`, no `id`), unwrap it — this removes the block line box
+   entirely for single-line cells.
+4. Collapse runs of two or more consecutive `<br>` (ignoring whitespace-only text
+   nodes between them) down to one.
+5. Strip the `height` attribute, and the `height`, `min-height`, `line-height`
+   and any `mso-*` inline style declarations, from `table, colgroup, col, tr, td,
+   th, p, div, span` inside the table. Remove `class="MsoNormal"` /
+   `MsoTableGrid`-style Word classes. Reuse the existing style-string dedupe
+   helper for rewriting the `style` attribute so you do not reintroduce `;;` or
+   duplicate properties; if that helper does not exist yet, add it.
+6. Do **not** restructure `<p>x</p><p>y</p>` into `x<br>y`. Step 2's CSS already
+   removes the margins, and rewriting the block structure risks the template
+   parser. If you believe it is necessary, add it behind an explicit opt-in
+   parameter defaulting to `false` and leave it off.
+7. Return `doc.body.innerHTML`.
+
+Guards: `null`, `undefined` and `''` input return `''` without throwing. HTML with
+no `table[data-table-type]` is returned unchanged. The function must be
+**idempotent** — running it twice must produce byte-identical output.
+
+## Step 4 — Hook the sanitizer into all four paths
+Run `normalizeCellSpacing` at each of these, so editor, stored HTML and preview
+agree:
+1. on paste into the editor — `editor.on('PastePreProcess', ...)`, rewriting the
+   event's `content`;
+2. when template HTML is loaded into the editor, before `setContent`;
+3. when template HTML is saved/serialized out of the editor;
+4. in the preview render path, before it reaches `bypassSecurityTrustHtml`.
+Also add to the init, after verifying the exact names for the installed version,
+options that stop the junk arriving in the first place — the paste-cleanup
+options (`paste_merge_formats`, `paste_webkit_styles`,
+`paste_remove_styles_if_webkit`) and `invalid_styles` narrowed to the elements
+that need it, e.g. `invalid_styles: { 'tr': 'height', 'td': 'height', 'th': 'height' }`.
+Do not blanket-block `line-height` globally; users legitimately set it in body text.
+
+## Step 5 — Enable drag-to-resize on the table
+In the TinyMCE init (verify each name against the installed version first):
+
+  plugins: '... table ...',                    // required; without it, nothing below applies
+  object_resizing: true,                       // corner/edge handles around the table.
+                                               // A selector string that omits `table`
+                                               // (e.g. 'img') disables table handles.
+  table_resize_bars: true,                     // draggable bars on column/row borders
+  table_column_resizing: 'resizetable',        // dragging a column border changes the
+                                               // TABLE width too. 'preservetable' (the
+                                               // default) keeps total width fixed.
+  table_sizing_mode: 'relative',               // widths persisted as % — matches the
+                                               // existing <col style="width:NN%">
+                                               // colgroups and survives A4/PDF layout.
+                                               // 'fixed' writes px, which overflows the
+                                               // printed page; do not use it here.
+  table_use_colgroups: true,
+  table_advtab: true,                          // numeric width field in Table properties
+  table_cell_advtab: true,
+  table_row_advtab: true,
+
+Also make sure `table` is reachable from the menubar or toolbar so "Table
+properties" is available as a keyboard/numeric fallback to dragging.
+
+Note for your own reasoning: `resize: 'both'` resizes the **editor container**,
+not the table. It is a different feature. Do not offer it as the fix for Bug 2.
+
+Then confirm none of the blockers apply, and report on each: `readonly` mode is
+off; the table is not inside a `contenteditable="false"` / `noneditable` region;
+no CSS `transform`, `zoom` or `scale` on an ancestor of the editor (it breaks
+handle hit-testing); `valid_elements` / `valid_styles` do not strip `width` from
+`table` or `col`; and for self-hosted TinyMCE 7+, `license_key` is set (a missing
+key can prevent init, which makes every handle disappear at once).
+
+## Step 6 — Stop the pipeline from reverting a manually set width
+This is required for Bug 2 to actually persist.
+1. Change `normalizeColWidths()` so it normalizes the `<col>` percentages
+   relative to one another (they must still sum to 100) but **does not touch
+   `table.style.width`** when the table already carries an explicit width. Only
+   set `width: 100%` when no explicit width is present. Keep setting
+   `table-layout: fixed`.
+2. Change the preview rule from `width: 100%` to `max-width: 100%` and remove any
+   `!important`, so the table's own inline width wins in the preview.
+3. Make sure the table's `width` style survives serialization and the Angular
+   sanitizer (see Step 0.3) end to end.
+4. Keep the earlier fix's guarantees intact: `<col>` percentages still sum to 100,
+   no `;;` or duplicated properties in style strings.
+
+## Step 7 — Manual verification
+Reproduce with the bad HTML from Bug 1 above, then confirm in DevTools. Remember
+the editor content lives in an iframe: to inspect it you must select the iframe's
+document, and TinyMCE's "Source code" view (the `code` plugin) shows you the real
+HTML.
+
+## Constraints
+- Minimal diff. No refactors, no renames, no reformatting of untouched lines.
+- No new dependencies. No Angular or TinyMCE version changes.
+- Do not change the HTML attribute contract on variable spans (`data-table-type`,
+  `data-repeat`, `data-var`, `data-entity`, `variable-id`, `format-type`,
+  `group-name`, `transpose-type`) or any backend expansion logic.
+- Do not modify editor typing or cursor behaviour.
+- TypeScript strict-safe; no `any`.
+- Do not regress the earlier preview fix: long unbreakable cell text must still
+  wrap inside its own cell and must not paint over neighbouring cells.
+
+## Do NOT do any of these (each is a plausible-looking wrong turn)
+- Do not put the cell CSS in an Angular component stylesheet, or reach for
+  `::ng-deep` / `ViewEncapsulation.None` to style editor content. The editor
+  content is in an iframe; only `content_css` / `content_style` reach it.
+- Do not use `p:empty` to hide the filler paragraphs. It does not match
+  `<p>&nbsp;</p>`.
+- Do not set `vertical-align` to close the gap. It does not distribute content
+  within a cell.
+- Do not set `forced_root_block: ''` or `false`. It is removed/deprecated and
+  will break typing.
+- Do not add `overflow: hidden` to `<td>`. Rows must grow taller, never clip.
+- Do not add `width: 100% !important` to the table anywhere.
+- Do not write an unscoped `p { margin: 0 }`.
+- Do not invent or guess TinyMCE option names. Verify each against the docs for
+  the installed version and report anything that does not exist there.
+
+## Acceptance criteria
+1. In the bad-HTML repro, the vertical gap between "Fee Start Date" and
+   "Fee End Date" is under 8px, and the row height matches its tallest real
+   content (the 3-line "MinMax Amount / Applied?" cell) rather than exceeding it.
+2. `editor.getContent()` for that cell contains no whitespace-only `<p>`, no
+   `height` attribute or `height`/`line-height` inline style on the `td`/`tr`,
+   and no `mso-*` declarations.
+3. `normalizeCellSpacing` is idempotent, returns `''` for `null`/`undefined`/`''`,
+   returns non-table HTML unchanged, and never drops a `.variable` span.
+4. Dragging the table's corner handle changes its width; the new width is present
+   in `editor.getContent()` as a `%` value on the `<table>`; it survives
+   save → reload → preview; and the `<col>` percentages still sum to 100.
+5. Dragging a column border changes that column's width and the total table width
+   (`table_column_resizing: 'resizetable'`), without any column collapsing to 0.
+6. The preview and the printed/PDF output show the same cell spacing and the same
+   table width as the editor.
+7. Ordinary body-text paragraph spacing outside tables is unchanged; lists inside
+   cells keep their indent and spacing.
+8. Existing unit tests pass. Add tests for `normalizeCellSpacing` covering:
+   whitespace-only `<p>`, `<p>&nbsp;</p>`, `<p><br></p>`, a blank `<p>` wrapping
+   a `.variable` span (must be kept), `<br><br><br>` collapsing, `height`
+   attribute and inline-style stripping, non-table HTML passthrough, empty/null
+   input, and idempotency. Extend the `normalizeColWidths` tests with a case
+   where the table has an explicit user-set width (must be preserved) and one
+   where it has none (must become 100%).
+
+## Output
+Work file by file. For each file show the path and a unified diff. Report the
+Step 0 findings before the first diff. After the last change, list the manual
+verification steps you performed and anything you could not verify.
