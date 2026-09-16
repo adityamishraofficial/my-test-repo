@@ -1,39 +1,110 @@
-Bug: table width is not retained in the backend preview HTML.
+# Task
+In the Angular app `wings-front`, move the "Dynamic Name" section so it renders
+INSIDE the Template Editor card, directly above the TinyMCE editor, instead of
+sitting in its own full-width container above it. Layout change only — no
+behaviour changes, no API changes.
 
-Editor HTML (correct):
-  <table style="... width: 61.2347%; margin-right: 0px; margin-left: auto;">
-  <colgroup><col style="width: 33.4085%"> x3
+# Current state (from the Template Management > Create page)
+- A standalone "Dynamic Name" container spans the full page width. It contains:
+  a hint line, a chip field (variable chips + literal separator text), a
+  "109 / 500 chars" counter, a "Hide Preview" toggle, a "RESOLVED PREVIEW" row,
+  and a "43 / 200" counter on the right.
+- Below it, a "Template Editor *" card holds a validation message
+  ("Content is required"), the TinyMCE menubar/toolbar, and the editor canvas.
+- To the right of the editor card sits a narrow rail with collapsible
+  "Variables" and "Clauses" panels. Variables are dragged from this rail into
+  both the Dynamic Name chip field and the editor.
+- Below: a "Template Criteria" section, then a Preview / Submit / Cancel footer.
 
-Preview HTML (wrong):
-  <table style="... width: auto; margin-right: 0px; margin-left: auto;
-                table-layout: fixed;">
-  <colgroup><col style="width: 33.4085%"> x3
+# Target state
+The Template Editor card contains, in order:
+1. Card header: "Template Editor *" + its validation message (unchanged)
+2. A compact "Dynamic name" strip (label, chip field, counter row, collapsible
+   resolved preview)
+3. A hairline divider
+4. The TinyMCE editor, unchanged
 
-Root cause: the preview normalizer overwrites the table's declared width
-(it previously forced 100%, now it forces auto). width:auto +
-table-layout:fixed + percentage <col> widths is circular, so the fixed
-layout algorithm collapses the table to min-content width. The rendered
-preview shows a tiny table at the right edge.
+The old standalone Dynamic Name container is removed entirely. The strip now
+occupies the editor column width only — it must NOT span under the right rail.
 
-Fix the preview normalizer:
-1. Never overwrite an existing table style.width. Apply a default of 100%
-   ONLY when width is absent or "auto".
-2. Remove any rule that sets width:auto or width:100% because the table
-   has margin-left:auto / margin-right:auto. Alignment works at any
-   width below 100%; no compensation is needed.
-3. If table-layout:fixed is applied, guarantee the table width is
-   resolvable (percentage or px) - never auto.
-4. Convert auto margins into explicit percentage margins so server-side
-   renderers honour alignment:
-     right  -> margin-left: (100 - width)%   margin-right: 0
-     left   -> margin-left: 0                margin-right: (100 - width)%
-     center -> both margins: (100 - width)/2 %
-   Only when width is a percentage below 100.
-5. Keep <col> widths exactly as authored. Distribute evenly only when
-   every <col> lacks a width.
+# Step 1 — Discover before editing
+Do not edit anything yet. Locate and report:
+- The component template containing the "Dynamic Name" label and
+  "RESOLVED PREVIEW" text (search for the i18n keys, not the English strings —
+  this project uses @ngx-translate).
+- The component template containing the TinyMCE editor and the "Template Editor"
+  header.
+- Whether the Dynamic Name UI is its own component or inline markup.
+- How variables are dragged from the Variables rail into the chip field:
+  Angular CDK (cdkDropList / cdkDropListConnectedTo / cdkDragData) or native
+  HTML5 drag events (dragstart / dragover / drop).
+- Which FormGroup/FormControl the Dynamic Name value is bound to, and whether
+  that group is declared in the same component as the editor.
+Print a short findings summary, then proceed.
 
-Also report:
-- whether stripping <tr> height (currently emitted as style="") is
-  intentional
-- which server-side renderer generates the preview, so we can confirm
-  percentage table widths and margin support
+# Step 2 — Move the markup
+- If Dynamic Name is already its own component: relocate its selector tag into
+  the editor card template. Do not modify the component's @Input/@Output
+  signatures, selector, or internal logic.
+- If it is inline markup: extract it into a new standalone-in-name-only
+  component declared in the same NgModule (this project is NgModule-based, not
+  standalone components), then place it in the editor card.
+- The FormControl binding must keep working. If the control lives in a different
+  FormGroup or component than the editor, pass it down via @Input or use
+  formGroupName/formControlName consistent with how the rest of this form is
+  wired. Do not introduce a new form or a second source of truth.
+- Move all existing translate keys as-is. Do not hardcode English strings and do
+  not invent new keys unless a new element genuinely needs one.
+
+# Step 3 — Restyle for the narrower column
+The strip is now roughly half its previous width, so:
+- Chips must wrap onto multiple lines. The chip row grows from one line to a
+  max-height of about three lines, then scrolls vertically. Never scroll
+  horizontally.
+- Long chip labels (e.g. "Underlying transaction details") truncate with
+  text-overflow: ellipsis and expose the full label via title/tooltip.
+- Put the char counter and the preview toggle on one right-aligned row below the
+  chip field, not on separate lines.
+- The resolved preview stays collapsible. Keep the existing Hide/Show Preview
+  behaviour and its current default state. When expanded, the resolved value
+  wraps (overflow-wrap: anywhere) instead of overflowing.
+- Keep the strip visually secondary to the editor: smaller label, hairline
+  separator below it, no heavy border or nested card.
+- Write styles in the owning component's .scss using the project's existing
+  Sass variables/mixins via @use. Do not add global styles, do not add new
+  colour literals, do not introduce !important.
+
+# Step 4 — Preserve behaviour (verify each)
+- Drag from the Variables rail into the chip field still works after the DOM
+  move. If CDK is used, check that cdkDropListConnectedTo still resolves — if it
+  references element IDs or template refs, update them to match the new DOM
+  position. If a drop list registration relies on DOM order, fix it explicitly.
+- Dragging into the TinyMCE editor still works and is unaffected.
+- Chip removal (the x button), chip reordering if present, and the
+  date/amount format popover all still work.
+- The 500-char and 200-char counters update as before.
+- Form validation, dirty/pristine state, and Submit enablement are unchanged.
+- The editor's height does not collapse or overflow its card; the Template
+  Criteria section and footer keep their positions.
+
+# Constraints
+- No new npm dependencies.
+- Do not modify the TinyMCE init/config object.
+- Do not modify backend payloads, DTOs, or services.
+- Do not reformat or lint-fix files you are not otherwise changing.
+- Do not rename existing components, selectors, inputs, outputs, or CSS classes
+  that are referenced elsewhere.
+- Keep changes to the smallest set of files possible.
+
+# Verify
+Run, and fix anything that breaks:
+- the project's build
+- the project's lint task
+- the project's unit tests for the touched components
+Report the exact commands you ran and their results.
+
+# Output
+1. Findings summary from Step 1.
+2. A unified diff of every changed file.
+3. A short list of anything you could not verify from code alone and that needs
+   manual testing in the browser — specifically the drag-and-drop paths.
